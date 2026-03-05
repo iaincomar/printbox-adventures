@@ -1,23 +1,36 @@
-.font-mono { font-family: 'DM Mono', monospace; }
+.font-mono { font-family: 'DM Mono', monospace !important; }
 
 .viewer-header-img {
-  height: 110px;
+  height: 90px;
   object-fit: cover;
-  object-position: center;
   display: block;
 }
 .viewer-footer-img {
-  height: 60px;
+  height: 56px;
   object-fit: cover;
-  object-position: center;
   display: block;
 }
 
-/* Hover en foto */
-.viewer-photo .viewer-photo-hint { opacity: 0; transition: opacity 0.2s; }
-.viewer-photo:hover:not(:disabled) .viewer-photo-hint { opacity: 1; }
-.viewer-photo:hover:not(:disabled) { border-color: #f7c604 !important; transform: translateY(-4px); box-shadow: 0 8px 32px rgba(247,198,4,0.25); }
-.viewer-photo { transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s; }
+/* Foto card */
+.viewer-photo-card {
+  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+}
+.viewer-photo-card .viewer-photo-hint { opacity: 0; transition: opacity 0.2s; }
+.viewer-photo-card:hover .viewer-photo-hint { opacity: 1; }
+.viewer-photo-card:hover {
+  border-color: #f7c604 !important;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 24px rgba(247,198,4,0.2);
+}
 
-/* Paginador activo */
-.page-item.active .page-link { background-color: #f7c604 !important; border-color: #f7c604 !important; color: #000 !important; }
+/* Paginador */
+.page-item.active .page-link {
+  background-color: #f7c604 !important;
+  border-color: #f7c604 !important;
+  color: #000 !important;
+}
+
+@media (max-width: 576px) {
+  .viewer-header-img { height: 70px; }
+  .viewer-footer-img { height: 44px; }
+}
