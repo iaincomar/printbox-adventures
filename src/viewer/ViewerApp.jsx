@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react'
-import { findEvent, getEventPhotos, printJob } from '../shared/api'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { findEvent, getEventPhotos, printJob, saveConfig } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
@@ -14,24 +14,56 @@ export default function ViewerApp() {
   const [preview, setPreview] = useState(null)
   const [printing, setPrinting] = useState(null)
   const [error, setError] = useState(null)
+
+  // ── Modal evento ─────────────────────────────────────────────────────────
+  const [showModal, setShowModal] = useState(false)
+  const [eventInput, setEventInput] = useState('')
+  const [eventError, setEventError] = useState('')
+  const inputRef = useRef(null)
+
   const BACKEND = window.electronAPI?.backendUrl || 'http://localhost:4000'
 
+  // Carga config y decide si mostrar modal
   useEffect(() => {
-    fetch(`${BACKEND}/config`)
-      .then(r => r.json())
-      .then(d => { setConfig(d.config); setTextos(d.textos) })
-      .catch(() => {})
-    fetch(`${BACKEND}/print/count`)
-      .then(r => r.json())
-      .then(d => setPrintCount(d.count || 0))
-      .catch(() => {})
+    Promise.all([
+      fetch(`${BACKEND}/config`).then(r => r.json()),
+      fetch(`${BACKEND}/print/count`).then(r => r.json()).catch(() => ({ count: 0 })),
+    ]).then(([d, c]) => {
+      if (d.config) setConfig(d.config)
+      if (d.textos) setTextos(d.textos)
+      setPrintCount(c.count || 0)
+      // Siempre preguntar el evento al abrir
+      setShowModal(true)
+    }).catch(() => setShowModal(true))
   }, [BACKEND])
 
+  // Focus en el input del modal
+  useEffect(() => {
+    if (showModal) setTimeout(() => inputRef.current?.focus(), 50)
+  }, [showModal])
+
+  async function handleEventConfirm() {
+    const code = eventInput.trim()
+    if (!code) { setEventError('Introduce el número del evento'); return }
+    const fullCode = `ev-${code}`
+    setEventError('')
+    setShowModal(false)
+    const newConfig = { ...config, evento: fullCode }
+    setConfig(newConfig)
+    await saveConfig(newConfig, textos).catch(() => {})
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') handleEventConfirm()
+    if (e.key === 'Escape') setShowModal(false)
+  }
+
+  // Conectar con el evento cuando config tenga evento
   useEffect(() => {
     if (!config?.evento) return
     findEvent(config.evento)
       .then(setUuid)
-      .catch(e => setError(`No se pudo conectar al evento: ${e.message}`))
+      .catch(e => setError(`No se pudo conectar: ${e.message}`))
   }, [config?.evento])
 
   const loadPhotos = useCallback(async () => {
@@ -56,11 +88,7 @@ export default function ViewerApp() {
     if (!imageName) return
     setPrinting(imageName)
     try {
-      const result = await printJob({
-        imageUrl, imageName,
-        printer: config?.impresora,
-        delay: config?.delay || 5,
-      })
+      const result = await printJob({ imageUrl, imageName, printer: config?.impresora, delay: config?.delay || 5 })
       setPrintCount(result.count)
     } catch (e) {
       console.error('Error al imprimir:', e)
@@ -74,21 +102,40 @@ export default function ViewerApp() {
     setPreview(photo.uri || photo.uri_full)
   }
 
-  if (!config) {
-    return (
-      <div className="viewer-loading">
-        <div className="viewer-loading__spinner" />
-        <span>Cargando configuración…</span>
-      </div>
-    )
-  }
-
   const row1 = photos.slice(0, 5)
   const row2 = photos.slice(5, 10)
 
   return (
     <div className="viewer">
-      {/* HEADER — banner superior con textos sobre la imagen */}
+
+      {/* MODAL EVENTO */}
+      {showModal && (
+        <div className="viewer-modal-overlay">
+          <div className="viewer-modal-box">
+            <img src="/assets/MoscaPrintbox.png" alt="Logo" className="viewer-modal-mascot" />
+            <h2 className="viewer-modal-title">¿Cuál es el evento?</h2>
+            <p className="viewer-modal-subtitle">Introduce el número del evento a mostrar</p>
+            <div className="viewer-modal-input-wrap">
+              <span className="viewer-modal-prefix">ev-</span>
+              <input
+                ref={inputRef}
+                className="viewer-modal-input"
+                type="text"
+                placeholder=""
+                value={eventInput}
+                onChange={e => setEventInput(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+            {eventError && <p className="viewer-modal-error">{eventError}</p>}
+            <button className="viewer-modal-btn" onClick={handleEventConfirm}>
+              Cargar evento →
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER */}
       <header className="viewer__header">
         <div className="viewer__header-banner">
           <img src="/assets/banners-AdventureSup.png" alt="" className="viewer__header-img" />
@@ -105,6 +152,9 @@ export default function ViewerApp() {
             <div className="viewer__counter">
               <span className="viewer__counter-num">{printCount}</span>
               <span className="viewer__counter-label">impresiones</span>
+              <button className="viewer__change-event" onClick={() => { setEventInput(''); setEventError(''); setShowModal(true) }} title="Cambiar evento">
+                ✏ cambiar evento
+              </button>
             </div>
           </div>
         </div>
@@ -113,10 +163,15 @@ export default function ViewerApp() {
 
       {/* GALERÍA */}
       <main className="viewer__gallery">
-        {photos.length === 0 ? (
+        {!uuid ? (
           <div className="viewer__empty">
             <div className="viewer__empty-icon">📷</div>
-            <p>Esperando fotos del evento <strong>{config.evento}</strong>…</p>
+            <p>Introduce el evento para ver las fotos</p>
+          </div>
+        ) : photos.length === 0 ? (
+          <div className="viewer__empty">
+            <div className="viewer__empty-icon">📷</div>
+            <p>Esperando fotos del evento <strong>{config?.evento}</strong>…</p>
           </div>
         ) : (
           <>
@@ -149,7 +204,7 @@ export default function ViewerApp() {
         </nav>
       )}
 
-      {/* FOOTER — banner inferior con precios */}
+      {/* FOOTER */}
       <footer className="viewer__footer">
         <div className="viewer__footer-banner">
           <img src="/assets/banners-Adventure_inf.png" alt="" className="viewer__footer-img" />
@@ -162,7 +217,7 @@ export default function ViewerApp() {
         </div>
       </footer>
 
-      {/* MODAL PREVISUALIZACIÓN */}
+      {/* PREVISUALIZACIÓN */}
       {preview && (
         <div className="viewer__modal" onClick={() => setPreview(null)}>
           <div className="viewer__modal-inner" onClick={e => e.stopPropagation()}>
@@ -179,15 +234,12 @@ function PhotoCard({ photo, printing, onPrint, onPreview }) {
   const thumb = photo.uri || photo.uri_full
   const name = thumb?.split('/').pop()
   const isPrinting = printing === name?.replace('thumbs_', 'gallery_')
-
   return (
-    <button
-      className={`viewer__photo ${isPrinting ? 'printing' : ''}`}
+    <button className={`viewer__photo ${isPrinting ? 'printing' : ''}`}
       onClick={() => onPrint(photo)}
       onContextMenu={e => onPreview(e, photo)}
       disabled={!!printing}
-      title="Click izquierdo: imprimir · Click derecho: previsualizar"
-    >
+      title="Click izquierdo: imprimir · Click derecho: previsualizar">
       <img src={thumb} alt="" draggable={false} />
       {isPrinting && (
         <div className="viewer__photo-overlay">

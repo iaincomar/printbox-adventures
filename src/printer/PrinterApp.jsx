@@ -21,16 +21,21 @@ export default function PrinterApp() {
   const [printers, setPrinters] = useState([])
   const [editing, setEditing] = useState(false)
 
+  // ── Modal de evento ──────────────────────────────────────────────────────
+  const [showEventModal, setShowEventModal] = useState(false)
+  const [eventInput, setEventInput] = useState('')
+  const [eventError, setEventError] = useState('')
+  const eventInputRef = useRef(null)
+
   // ── Estado de ejecución ──────────────────────────────────────────────────
   const [running, setRunning] = useState(false)
   const [uuid, setUuid] = useState(null)
-  const [printedImages, setPrintedImages] = useState([]) // nombres ya impresos
+  const [printedImages, setPrintedImages] = useState([])
   const [lastPhoto, setLastPhoto] = useState(null)
   const [printCount, setPrintCount] = useState(0)
   const [logs, setLogs] = useState([])
-  const [elapsed, setElapsed] = useState(0) // segundos desde encendido
+  const [elapsed, setElapsed] = useState(0)
 
-  const timerRef = useRef(null)
   const logsRef = useRef(null)
 
   // ── Carga inicial ────────────────────────────────────────────────────────
@@ -39,30 +44,26 @@ export default function PrinterApp() {
       if (d.config) setConfig(d.config)
       if (d.textos) setTextos(d.textos)
     }).catch(() => {})
-
     getPrinters().then(setPrinters).catch(() => {})
     getPrintCount().then(setPrintCount).catch(() => {})
-
-    // Cargar imágenes ya descargadas para no re-imprimir
-    fetch(`${BACKEND}/config`).then(r => r.json()).then(d => {
-      // Las imágenes ya impresas se cargan de la carpeta descargas al arrancar
-    }).catch(() => {})
   }, [])
 
-  // Autoscroll del log
   useEffect(() => {
-    if (logsRef.current) {
-      logsRef.current.scrollTop = logsRef.current.scrollHeight
-    }
+    if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight
   }, [logs])
 
+  // Focus automático en el input del modal
+  useEffect(() => {
+    if (showEventModal && eventInputRef.current) {
+      setTimeout(() => eventInputRef.current?.focus(), 50)
+    }
+  }, [showEventModal])
+
   function addLog(msg, type = 'info') {
-    const now = new Date()
-    const time = now.toTimeString().slice(0, 8)
+    const time = new Date().toTimeString().slice(0, 8)
     setLogs(prev => [...prev.slice(-200), { time, msg, type, id: Date.now() + Math.random() }])
   }
 
-  // ── Reloj de tiempo en ejecución ─────────────────────────────────────────
   useInterval(() => setElapsed(e => e + 1), running ? 1000 : null)
 
   function formatElapsed(s) {
@@ -72,23 +73,50 @@ export default function PrinterApp() {
     return `${h}:${m}:${sec}`
   }
 
-  // ── ENCENDER ─────────────────────────────────────────────────────────────
+  // ── Abrir modal al pulsar Encender ───────────────────────────────────────
+  // Abre modal para cambiar evento
+  function handleStartClick() {
+    setEventInput(config.evento?.replace('ev-', '') || '')
+    setEventError('')
+    setShowEventModal(true)
+  }
+
+  // Encender: arranca con el evento ya configurado
   async function handleStart() {
-    if (!config.evento) {
-      addLog('⚠ Introduce un código de evento antes de encender.', 'warn')
-      return
-    }
-    addLog(`Conectando con evento ${config.evento}…`)
+    if (!config.evento) { handleStartClick(); return }
+    addLog(`Conectando con evento ${config.evento}...`)
     try {
       const eventUuid = await findEvent(config.evento)
       setUuid(eventUuid)
       setRunning(true)
       setElapsed(0)
-      addLog(`✓ Conectado. UUID: ${eventUuid}`, 'success')
-      addLog(`Buscando fotos cada ${config.timer}s con ${config.delay}s de delay…`)
+      setPrintedImages([])
+      addLog(`Conectado. UUID: ${eventUuid}`, 'success')
+      addLog(`Buscando fotos cada ${config.timer}s con ${config.delay}s de delay...`)
     } catch (e) {
-      addLog(`✗ Error al conectar: ${e.message}`, 'error')
+      addLog(`Error al conectar: ${e.message}`, 'error')
     }
+  }
+
+  // ── Confirmar evento en el modal y arrancar ──────────────────────────────
+  async function handleEventConfirm() {
+    const code = eventInput.trim()
+    if (!code) {
+      setEventError('Introduce el número del evento')
+      return
+    }
+    const fullCode = `ev-${code}`
+    setEventError('')
+    setShowEventModal(false)
+    const newConfig = { ...config, evento: fullCode }
+    setConfig(newConfig)
+    await saveConfig(newConfig, textos)
+    addLog(`✓ Evento configurado: ${fullCode}`, 'success')
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') handleEventConfirm()
+    if (e.key === 'Escape') setShowEventModal(false)
   }
 
   // ── APAGAR ───────────────────────────────────────────────────────────────
@@ -98,7 +126,7 @@ export default function PrinterApp() {
     addLog('— Programa detenido.', 'warn')
   }
 
-  // ── POLLING: descarga e imprime fotos nuevas ──────────────────────────────
+  // ── POLLING ──────────────────────────────────────────────────────────────
   const checkAndPrint = useCallback(async () => {
     if (!uuid) return
     try {
@@ -111,7 +139,6 @@ export default function PrinterApp() {
 
         for (let t = 1; t <= (photo.times || 1); t++) {
           const imageName = baseName.replace('gallery_', `print_${t}_`)
-
           if (printedImages.includes(imageName)) continue
 
           addLog(`↓ Descargando ${imageName}…`)
@@ -128,7 +155,6 @@ export default function PrinterApp() {
             }).then(r => r.json())
 
             if (result.error) throw new Error(result.error)
-
             setPrintedImages(prev => [...prev, imageName])
             setLastPhoto(baseUrl)
             setPrintCount(result.count)
@@ -138,7 +164,6 @@ export default function PrinterApp() {
           }
         }
       }
-
       addLog('… Esperando más imágenes.')
     } catch (e) {
       addLog(`✗ Error al consultar API: ${e.message}`, 'error')
@@ -147,16 +172,48 @@ export default function PrinterApp() {
 
   useInterval(checkAndPrint, running ? config.timer * 1000 : null)
 
-  // ── Guardar config ────────────────────────────────────────────────────────
   async function handleSave() {
     await saveConfig(config, textos)
     setEditing(false)
     addLog('✓ Configuración guardada.', 'success')
   }
 
-  // ── RENDER ────────────────────────────────────────────────────────────────
   return (
     <div className="printer">
+      {/* MODAL EVENTO */}
+      {showEventModal && (
+        <div className="modal-overlay">
+          <div className="modal-box">
+            <div className="modal-logo">
+              <img src="/assets/MoscaPrintbox.png" alt="Logo" className="modal-mascot" />
+            </div>
+            <h2 className="modal-title">¿Cuál es el evento?</h2>
+            <p className="modal-subtitle">Introduce el número del evento a conectar</p>
+            <div className="modal-input-wrap">
+              <span className="modal-prefix">ev-</span>
+              <input
+                ref={eventInputRef}
+                className="modal-input"
+                type="text"
+                placeholder=""
+                value={eventInput}
+                onChange={e => setEventInput(e.target.value.replace(/\D/g, ''))}
+                onKeyDown={handleKeyDown}
+              />
+            </div>
+            {eventError && <p className="modal-error">{eventError}</p>}
+            <div className="modal-actions">
+              <button className="btn btn--ghost" onClick={() => setShowEventModal(false)}>
+                Cancelar
+              </button>
+              <button className="btn btn--accent" onClick={handleEventConfirm}>
+                Cambiar Evento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* HEADER */}
       <header className="printer__header">
         <div className="printer__logo">
@@ -167,6 +224,14 @@ export default function PrinterApp() {
           </div>
         </div>
         <div className="printer__header-right">
+          {config.evento && (
+            <span className="printer__evento-badge">
+              {config.evento}
+              <button className="printer__evento-change" onClick={handleStartClick} disabled={running} title="Cambiar evento">
+                ✏
+              </button>
+            </span>
+          )}
           <span className="printer__contact">eventos@printboxweb.com · 623 040 445</span>
         </div>
       </header>
@@ -178,49 +243,29 @@ export default function PrinterApp() {
             Configuración
             <div className="printer__mode-badge">API · {config.servidor}</div>
           </div>
-
           <div className="printer__config-grid">
-            <Field label="Código de evento" mono>
-              <input
-                value={config.evento}
-                onChange={e => setConfig(p => ({ ...p, evento: e.target.value }))}
-                disabled={!editing || running}
-                placeholder="ev-1234"
-              />
-            </Field>
             <Field label="Delay (seg)" mono hint="Espera antes de imprimir">
-              <input
-                type="number" min="1"
-                value={config.delay}
+              <input type="number" min="1" value={config.delay}
                 onChange={e => setConfig(p => ({ ...p, delay: parseInt(e.target.value) || 5 }))}
-                disabled={!editing || running}
-              />
+                disabled={!editing || running} />
             </Field>
             <Field label="Timer (seg)" mono hint="Frecuencia de consulta">
-              <input
-                type="number" min="5"
-                value={config.timer}
+              <input type="number" min="5" value={config.timer}
                 onChange={e => setConfig(p => ({ ...p, timer: parseInt(e.target.value) || 5 }))}
-                disabled={!editing || running}
-              />
+                disabled={!editing || running} />
             </Field>
             <Field label="Impresora">
-              <select
-                value={config.impresora}
+              <select value={config.impresora}
                 onChange={e => setConfig(p => ({ ...p, impresora: e.target.value }))}
-                disabled={!editing || running}
-              >
+                disabled={!editing || running}>
                 <option value="">— Predeterminada del sistema —</option>
                 {printers.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </Field>
           </div>
-
           <div className="printer__config-actions">
             {!editing ? (
-              <button className="btn btn--ghost" onClick={() => setEditing(true)} disabled={running}>
-                ✏ Editar
-              </button>
+              <button className="btn btn--ghost" onClick={() => setEditing(true)} disabled={running}>✏ Editar</button>
             ) : (
               <>
                 <button className="btn btn--ghost" onClick={() => setEditing(false)}>Cancelar</button>
@@ -230,22 +275,19 @@ export default function PrinterApp() {
           </div>
         </section>
 
-        {/* TEXTOS del Viewer */}
         {editing && (
           <section className="printer__textos-section">
             <div className="printer__section-title">Textos del Visor</div>
             <div className="printer__textos-grid">
               {[
-                ['text_es', 'Español'], ['text_en', 'English'],
-                ['text_fr', 'Français'], ['text_de', 'Deutsch'],
-                ['precio1', '1 foto (precio)'], ['precio2', '2 fotos (precio)'],
-                ['precio3', '3 fotos (precio)'], ['empresa', 'Empresa'],
+                ['text_es','Español'],['text_en','English'],
+                ['text_fr','Français'],['text_de','Deutsch'],
+                ['precio1','1 foto (precio)'],['precio2','2 fotos (precio)'],
+                ['precio3','3 fotos (precio)'],['empresa','Empresa'],
               ].map(([key, label]) => (
                 <Field key={key} label={label} mono>
-                  <input
-                    value={textos[key] || ''}
-                    onChange={e => setTextos(p => ({ ...p, [key]: e.target.value }))}
-                  />
+                  <input value={textos[key] || ''}
+                    onChange={e => setTextos(p => ({ ...p, [key]: e.target.value }))} />
                 </Field>
               ))}
             </div>
@@ -256,27 +298,21 @@ export default function PrinterApp() {
         <section className="printer__controls">
           <button
             className={`btn btn--big ${running ? 'btn--disabled' : 'btn--green'}`}
-            onClick={handleStart}
-            disabled={running}
-          >
+            onClick={handleStart} disabled={running}>
             ▶ Encender
           </button>
-
           <div className="printer__state-indicator">
             <div className={`printer__state-dot ${running ? 'on' : 'off'}`} />
             <span>{running ? 'EN EJECUCIÓN' : 'DETENIDO'}</span>
           </div>
-
           <button
             className={`btn btn--big ${!running ? 'btn--disabled' : 'btn--red'}`}
-            onClick={handleStop}
-            disabled={!running}
-          >
+            onClick={handleStop} disabled={!running}>
             ■ Apagar
           </button>
         </section>
 
-        {/* STATS + ÚLTIMA FOTO */}
+        {/* STATS */}
         <section className="printer__stats">
           <div className="printer__stat-card">
             <div className="printer__stat-num">{printCount}</div>
@@ -288,11 +324,9 @@ export default function PrinterApp() {
           </div>
           <div className="printer__last-photo">
             <div className="printer__stat-label" style={{ marginBottom: 8 }}>Última foto impresa</div>
-            {lastPhoto ? (
-              <img src={lastPhoto} alt="Última foto" className="printer__last-img" />
-            ) : (
-              <div className="printer__last-empty">—</div>
-            )}
+            {lastPhoto
+              ? <img src={lastPhoto} alt="Última foto" className="printer__last-img" />
+              : <div className="printer__last-empty">—</div>}
           </div>
         </section>
 
