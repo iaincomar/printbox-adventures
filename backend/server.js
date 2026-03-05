@@ -5,6 +5,7 @@ const fs = require('fs-extra')
 
 const printRoutes = require('./routes/print')
 const configRoutes = require('./routes/config')
+const printboxRoutes = require('./routes/printbox')
 
 const app = express()
 const PORT = 4000
@@ -14,22 +15,25 @@ const PORT = 4000
   fs.ensureDirSync(path.join(process.cwd(), d))
 )
 
-// Contador de impresiones persistente en C:/log/PBAcount.txt
-const LOG_PATH = 'C:/log/PBAcount.txt'
+// Contador de impresiones en C:/log/PBAcount.txt (Windows)
 if (process.platform === 'win32') {
   fs.ensureDirSync('C:/log')
-  if (!fs.existsSync(LOG_PATH)) fs.writeFileSync(LOG_PATH, '0')
+  if (!fs.existsSync('C:/log/PBAcount.txt')) fs.writeFileSync('C:/log/PBAcount.txt', '0')
 }
 
 app.use(cors())
 app.use(express.json())
 
-// Sirve las imágenes descargadas para que React las muestre
+// Sirve las imágenes descargadas localmente
 app.use('/descargas', express.static(path.join(process.cwd(), 'descargas')))
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
+// Proxy hacia gestion.printboxweb.com (evita CORS en el renderer)
+app.use('/printbox', printboxRoutes)
+// Impresión local: descarga → PDF → impresora
 app.use('/print', printRoutes)
+// Configuración: lee/escribe config/*.txt
 app.use('/config', configRoutes)
 
 app.listen(PORT, () =>

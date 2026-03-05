@@ -160,7 +160,7 @@ export default function PrinterApp() {
       {/* HEADER */}
       <header className="printer__header">
         <div className="printer__logo">
-          <span className="printer__logo-box">PB</span>
+          <img src="/assets/MoscaPrintbox.png" alt="Logo" className="printer__logo-mascot" />
           <div>
             <div className="printer__logo-title">PrintboxAdventures</div>
             <div className="printer__logo-sub">Panel de Control</div>
