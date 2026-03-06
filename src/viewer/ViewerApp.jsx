@@ -113,7 +113,7 @@ export default function ViewerApp() {
   }
 
   return (
-    <div className="viewer-app d-flex flex-column min-vh-100 bg-dark text-light">
+    <div className="viewer-app d-flex flex-column bg-dark text-light" style={{ height: "100vh", overflow: "hidden" }}>
 
       {/* ── MODAL EVENTO ── */}
       {showEventModal && (
@@ -165,7 +165,7 @@ export default function ViewerApp() {
                     <i className="bi bi-printer me-2 text-warning" />
                     {copies === 1 ? '1 copia seleccionada' : `${copies} copias seleccionadas`}
                     {getPrecio(copies) && (
-                      <span className="badge text-dark">{getPrecio(copies)}€</span>
+                      <span className="badge bg-warning text-dark ms-2">{getPrecio(copies)}€</span>
                     )}
                   </span>
                 )}
@@ -253,45 +253,13 @@ export default function ViewerApp() {
       )}
 
       {/* ── HEADER ── */}
-      <header className="viewer-header flex-shrink-0">
-        <div className="position-relative">
-          <img src="/assets/banners-AdventureSup.png" alt="" className="w-100 viewer-header-img" />
-          <div className="position-absolute top-0 start-0 end-0 bottom-0" style={{ pointerEvents: 'none' }}>
-            {/* Textos ES/EN — junto a la mascota, empieza en ~17% */}
-            <div className="position-absolute font-mono d-none d-md-block"
-              style={{ left: '17%', top: '50%', transform: 'translateY(-50%)', fontSize: 11, pointerEvents: 'none' }}>
-              {textos?.text_es && <div className="text-white fw-semibold">{textos.text_es}</div>}
-              {textos?.text_en && <div className="text-white fw-semibold">{textos.text_en}</div>}
-            </div>
-            {/* QR — centrado */}
-            <div className="position-absolute d-none d-sm-block"
-              style={{ left: '50%', top: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'auto' }}>
-              <img src="/assets/qr-code.png" alt="QR" className="bg-white p-1 rounded-2" style={{ width: 58, height: 58 }} />
-            </div>
-            {/* Textos FR/DE — junto a banderas FR/DE ~65% */}
-            <div className="position-absolute font-mono d-none d-md-block"
-              style={{ left: '65%', top: '50%', transform: 'translateY(-50%)', fontSize: 11, pointerEvents: 'none' }}>
-              {textos?.text_fr && <div className="text-white fw-semibold">{textos.text_fr}</div>}
-              {textos?.text_de && <div className="text-white fw-semibold">{textos.text_de}</div>}
-            </div>
-            {/* Contador + cambiar evento — antes del logo PrintboxAdventure (~83%) */}
-            <div className="position-absolute text-end"
-              style={{ left: '80%', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'auto' }}>
-              <div className="text-warning fw-bold lh-1" style={{ fontSize: 24 }}>{printCount}</div>
-              <div className="text-white font-mono" style={{ fontSize: 9, opacity: 0.85, textTransform: 'uppercase', letterSpacing: 1 }}>impresiones</div>
-              <button className="btn btn-link p-0 text-white-50 font-mono d-block"
-                style={{ fontSize: 9, pointerEvents: 'auto' }}
-                onClick={() => { setEventInput(''); setEventError(''); setShowEventModal(true) }}>
-                <i className="bi bi-pencil me-1" />cambiar
-              </button>
-            </div>
-          </div>
-        </div>
+      <header className="flex-shrink-0">
+        <div style={{ height: 90, minHeight: 90, maxHeight: 90, flexShrink: 0, backgroundImage: "url(/assets/banners-AdventureSup.png)", backgroundSize: "cover", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
         {error && <div className="alert alert-danger py-1 px-3 mb-0 rounded-0 font-mono small border-0">{error}</div>}
       </header>
 
       {/* ── GALERÍA ── */}
-      <main className="flex-grow-1 overflow-auto py-3 px-2 px-md-4">
+      <main className="flex-grow-1 py-3 px-2 px-md-4" style={{ overflowY: "auto", overflowX: "hidden" }}>
         {!uuid ? (
           <div className="text-center text-secondary py-5">
             <i className="bi bi-camera" style={{ fontSize: 56 }} />
@@ -340,39 +308,39 @@ export default function ViewerApp() {
       )}
 
       {/* ── FOOTER ── */}
-      <footer className="viewer-footer flex-shrink-0">
-        <div className="position-relative">
-          <img src="/assets/banners-Adventure_inf.png" alt="" className="w-100 viewer-footer-img" />
-          <div className="position-absolute top-0 start-0 end-0 bottom-0" style={{ pointerEvents: 'none' }}>
-            {/* Precio 1 — junto al primer círculo ~13% */}
-            {textos?.precio1 && (
-              <div className="position-absolute font-mono fw-bold"
-                style={{ left: '13%', top: '50%', transform: 'translateY(-50%)', fontSize: 13 }}>
-                <span className="">{textos.precio1}€</span>
-              </div>
-            )}
-            {/* Precio 2 — junto al segundo círculo ~42% */}
-            {textos?.precio2 && (
-              <div className="position-absolute font-mono fw-bold"
-                style={{ left: '42%', top: '50%', transform: 'translateY(-50%)', fontSize: 13 }}>
-                <span className="">{textos.precio2}€</span>
-              </div>
-            )}
-            {/* Precio 3 — junto al tercer círculo ~63% */}
-            {textos?.precio3 && (
-              <div className="position-absolute font-mono fw-bold"
-                style={{ left: '63%', top: '50%', transform: 'translateY(-50%)', fontSize: 13 }}>
-                <span className="">{textos.precio3}€</span>
-              </div>
-            )}
-            {/* Empresa — derecha */}
-            {textos?.empresa && (
-              <div className="position-absolute font-mono fw-bold text-white d-none d-sm-block"
-                style={{ right: '3%', top: '50%', transform: 'translateY(-50%)', fontSize: 12 }}>
-                {textos.empresa}
-              </div>
-            )}
-          </div>
+      <footer className="flex-shrink-0 bg-black border-top border-secondary">
+        <div className="d-flex align-items-center justify-content-center justify-content-md-start flex-wrap gap-2 gap-md-4 px-3 px-md-5 py-2">
+          {textos?.precio1 && (
+            <span className="font-mono">
+              <span className="text-secondary me-1">1 foto</span>
+              <span className="badge bg-warning text-dark fw-bold fs-6">{textos.precio1}€</span>
+            </span>
+          )}
+          {textos?.precio2 && (
+            <span className="font-mono">
+              <span className="text-secondary me-1">2 fotos</span>
+              <span className="badge bg-warning text-dark fw-bold fs-6">{textos.precio2}€</span>
+            </span>
+          )}
+          {textos?.precio3 && (
+            <span className="font-mono">
+              <span className="text-secondary me-1">3 fotos</span>
+              <span className="badge bg-warning text-dark fw-bold fs-6">{textos.precio3}€</span>
+            </span>
+          )}
+          {textos?.empresa && (
+            <span className="text-secondary font-mono small ms-md-auto">
+              <i className="bi bi-camera me-1" />{textos.empresa}
+            </span>
+          )}
+          <span className="text-secondary font-mono small ms-md-0">
+            <i className="bi bi-printer me-1" />
+            <span className="text-warning fw-bold">{printCount}</span> impresiones
+          </span>
+          <button className="btn btn-outline-secondary btn-sm font-mono"
+            onClick={() => { setEventInput(''); setEventError(''); setShowEventModal(true) }}>
+            <i className="bi bi-pencil me-1" />Cambiar evento
+          </button>
         </div>
       </footer>
 

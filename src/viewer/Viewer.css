@@ -2,12 +2,11 @@
 
 .viewer-header-img {
   height: 90px;
+  min-height: 90px;
+  max-height: 90px;
+  width: 100%;
   object-fit: cover;
-  display: block;
-}
-.viewer-footer-img {
-  height: 56px;
-  object-fit: cover;
+  object-position: center;
   display: block;
 }
 
@@ -33,4 +32,17 @@
 @media (max-width: 576px) {
   .viewer-header-img { height: 70px; }
   .viewer-footer-img { height: 44px; }
+}
+
+/* Header y footer altura fija */
+.viewer-app > header { flex-shrink: 0 !important; }
+.viewer-app > footer { flex-shrink: 0 !important; }
+.viewer-app > footer .d-flex { min-height: 48px; }
+
+@media (max-width: 576px) {
+  .viewer-header-img {
+    height: 90px !important;
+    min-height: 90px !important;
+    max-height: 90px !important;
+  }
 }
