@@ -253,8 +253,7 @@ export default function ViewerApp() {
       )}
 
       {/* ── HEADER ── */}
-      <header className="flex-shrink-0">
-        <div style={{ height: 90, minHeight: 90, maxHeight: 90, flexShrink: 0, backgroundImage: "url(/assets/banners-AdventureSup.png)", backgroundSize: "cover", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
+      <header style={{ height: 90, minHeight: 90, maxHeight: 90, flexShrink: 0, backgroundImage: "url(/assets/banners-AdventureSup.png)", backgroundSize: "100% 100%", backgroundRepeat: "no-repeat", backgroundPosition: "center" }}>
         {error && <div className="alert alert-danger py-1 px-3 mb-0 rounded-0 font-mono small border-0">{error}</div>}
       </header>
 
@@ -337,7 +336,7 @@ export default function ViewerApp() {
             <i className="bi bi-printer me-1" />
             <span className="text-warning fw-bold">{printCount}</span> impresiones
           </span>
-          <button className="btn btn-outline-secondary btn-sm font-mono"
+          <button className="btn btn-warning btn-sm font-mono text-dark fw-bold"
             onClick={() => { setEventInput(''); setEventError(''); setShowEventModal(true) }}>
             <i className="bi bi-pencil me-1" />Cambiar evento
           </button>
