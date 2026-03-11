@@ -1,22 +1,26 @@
 ================================================================================
   PRINTBOX ADVENTURES — Documentación completa
-  Migración de Python + tkinter  →  React + Electron + Node.js
+  Versión 1.0.0 · Desarrollado por Alejandro · 2026
 ================================================================================
 
 ÍNDICE
 ------
-  1. Descripción general
-  2. Requisitos
-  3. Instalación y arranque
-  4. Estructura del proyecto
-  5. Cómo funciona la aplicación
-     5.1 Panel de Control (Printer)
-     5.2 Visor de Evento (Viewer)
-  6. Archivos de configuración
-  7. Assets / Imágenes
-  8. Arquitectura técnica
-  9. Cambios respecto a la versión Python
-  10. Solución de problemas conocidos
+  1.  Descripción general
+  2.  Requisitos
+  3.  Instalación y arranque (desarrollo)
+  4.  Compilar instalador .exe (producción)
+  5.  Estructura del proyecto
+  6.  Cómo funciona la aplicación
+       6.1 Panel de Control (Printer)
+       6.2 Visor de Evento (Viewer)
+  7.  Archivos de configuración
+  8.  Assets / Imágenes
+  9.  Arquitectura técnica
+  10. Flujo de datos completo
+  11. Dependencias principales
+  12. Cambios respecto a la versión Python original
+  13. Solución de problemas conocidos
+  14. Pendientes / Ideas de mejora
 
 
 ================================================================================
@@ -24,39 +28,50 @@
 ================================================================================
 
 PrintboxAdventures es una aplicación de escritorio para gestionar la impresión
-de fotos en eventos. Se compone de dos pantallas que se abren simultáneamente:
+de fotos en eventos. Migrada en 2026 de Python + tkinter a React + Electron +
+Node.js Express.
 
-  - PANEL DE CONTROL (Printer): lo usa el operador para conectar al evento,
-    monitorizar las descargas e impresiones y configurar la impresora.
+Se compone de DOS PANTALLAS que se abren simultáneamente al arrancar:
 
-  - VISOR DE EVENTO (Viewer): pantalla tipo kiosco orientada al público.
-    Muestra las fotos del evento en una galería. El usuario puede hacer click
-    en una foto para imprimirla o click derecho para previsualizarla.
+  - PANEL DE CONTROL (Printer):
+    Lo usa el operador. Conecta al evento, monitoriza las impresiones,
+    configura la impresora y los textos del Viewer.
 
-La aplicación se conecta a la API de Printbox en:
-  http://gestion.printboxweb.com
+  - VISOR DE EVENTO (Viewer):
+    Pantalla pública orientada al cliente del evento. Muestra la galería
+    de fotos. El usuario hace click en una foto para imprimirla, selecciona
+    cuántas copias quiere (1, 2 o 3) y confirma.
 
-El backend (servidor Laravel) gestiona los eventos y las fotos. Esta app
-solo consume esa API y gestiona la impresión física en local.
+La app se conecta a la API de Printbox en:
+  https://gestion.printboxweb.com  (servidor Laravel)
+
+El backend de Printbox gestiona los eventos y las fotos. Esta app solo
+consume esa API y gestiona la impresión física local.
 
 
 ================================================================================
 2. REQUISITOS
 ================================================================================
 
-  - Windows 10 o superior (la impresión física requiere Windows)
+PARA DESARROLLO:
+  - Windows 10/11 x64
   - Node.js v18 o superior  →  https://nodejs.org
   - npm (viene incluido con Node.js)
-  - Una impresora instalada en el sistema (o PDF como impresora virtual para pruebas)
+  - Una impresora instalada (o PDF como impresora virtual para pruebas)
   - Conexión a internet para acceder a la API de Printbox
+
+PARA EL EQUIPO DESTINO (instalador .exe):
+  - Windows 10/11 x64
+  - NO necesita Node.js ni nada de desarrollo
+  - SÍ necesita una impresora instalada y conexión a internet
 
 
 ================================================================================
-3. INSTALACIÓN Y ARRANQUE
+3. INSTALACIÓN Y ARRANQUE (DESARROLLO)
 ================================================================================
 
 PRIMERA VEZ:
-  1. Descomprimir el proyecto en una carpeta
+  1. Descomprimir o clonar el proyecto en una carpeta
   2. Abrir una terminal (PowerShell o CMD) en esa carpeta
   3. Ejecutar:
        npm install
@@ -65,16 +80,10 @@ PRIMERA VEZ:
 ARRANCAR EN MODO DESARROLLO:
   npm run dev
 
-  Esto lanza 3 procesos simultáneamente:
-    [REACT]    Servidor de desarrollo en http://localhost:3000
-    [BACKEND]  Servidor Express local en http://localhost:4000
-    [ELECTRON] Ventana de escritorio con las dos pantallas
-
-COMPILAR PARA PRODUCCIÓN:
-  npm run build
-
-  Genera un instalador .exe en la carpeta dist-electron/
-  El instalador incluye todo, no necesita Node.js instalado para ejecutarse.
+  Lanza 3 procesos simultáneamente:
+    [REACT]    Vite dev server en http://localhost:3000
+    [BACKEND]  Express local en http://localhost:4000
+    [ELECTRON] Abre las dos ventanas apuntando a localhost:3000
 
 VERIFICAR QUE EL BACKEND FUNCIONA:
   Abrir en el navegador: http://localhost:4000/health
@@ -82,283 +91,421 @@ VERIFICAR QUE EL BACKEND FUNCIONA:
 
 
 ================================================================================
-4. ESTRUCTURA DEL PROYECTO
+4. COMPILAR INSTALADOR .EXE (PRODUCCIÓN)
+================================================================================
+
+PREPARACIÓN (solo la primera vez):
+  - Convertir MoscaPrintbox.png a .ico en https://convertio.co/png-ico/
+  - Guardar el .ico en:  src/public/MoscaPrintbox.ico
+  - Sin el .ico el instalador sale con el icono por defecto de Electron
+
+COMPILAR:
+  npm run build
+
+  Proceso:
+    1. Vite compila el frontend React → carpeta dist/
+    2. electron-builder empaqueta todo → dist-electron/
+
+RESULTADO:
+  dist-electron/
+  ├── PrintboxAdventures Setup 1.0.0.exe   ← ESTE ES EL INSTALADOR
+  ├── win-unpacked/                         (app sin empaquetar, para pruebas)
+  ├── latest.yml                            (para auto-actualizaciones futuras)
+  └── builder-effective-config.yaml        (config usada en el build)
+
+  Solo hace falta el .exe para distribuir. Los demás archivos son auxiliares.
+
+INSTALAR EN OTRO EQUIPO:
+  - Copiar solo el .exe al equipo destino
+  - Hacer doble click e instalar
+  - La primera vez que arranca crea automáticamente:
+      C:\Users\[usuario]\AppData\Local\PrintboxAdventures\
+        ├── config\servidor_api.txt
+        ├── config\textos.txt
+        ├── descargas\
+        ├── pdf\
+        └── PBAcount.txt
+
+  IMPORTANTE: Si hay una versión anterior instalada, desinstalarla primero
+  desde "Agregar o quitar programas" antes de instalar la nueva.
+
+
+================================================================================
+5. ESTRUCTURA DEL PROYECTO
 ================================================================================
 
 printbox-adventures/
 │
 ├── electron/
 │   ├── main.js             Proceso principal de Electron.
-│   │                       Abre 2 ventanas: /printer y /viewer
+│   │                       - En DEV carga http://localhost:3000
+│   │                       - En PROD carga http://localhost:4000 (Express)
+│   │                       - Abre 2 ventanas: /#/printer y /#/viewer
+│   │                       - En producción espera 2s a que arranque Express
 │   └── preload.js          Expone la URL del backend al renderer
 │                           de forma segura (contextBridge)
 │
 ├── backend/
 │   ├── server.js           Servidor Express local (puerto 4000).
-│   │                       Solo gestiona lo que el navegador no puede:
-│   │                       impresión física y lectura de archivos locales.
+│   │                       - En DEV: gestiona API y config
+│   │                       - En PROD: también sirve dist/ y assets/
+│   │                       - Detecta si está empaquetado (isPackaged)
+│   │                       - Guarda datos en AppData en producción
 │   └── routes/
 │       ├── printbox.js     PROXY hacia gestion.printboxweb.com
-│       │                   Reenvía las llamadas a la API de Printbox
-│       │                   para evitar errores CORS desde el renderer.
-│       ├── print.js        Descarga imagen → convierte a PDF → imprime
-│       └── config.js       Lee y escribe los archivos config/*.txt
+│       │                   - Gestiona CSRF con CookieJar automáticamente
+│       │                   - Endpoints: find-event, photos, photos-to-print
+│       ├── print.js        Descarga imagen → PDF → imprime
+│       │                   - GET  /print/printers   lista impresoras
+│       │                   - GET  /print/count      contador impresiones
+│       │                   - POST /print/job        trabajo de impresión
+│       └── config.js       Lee y escribe config/*.txt
+│                           - GET  /config           leer configuración
+│                           - POST /config           guardar configuración
 │
 ├── src/
-│   ├── index.html          HTML principal
-│   ├── main.jsx            Entry point de React + React Router
-│   │                       Ruta /printer → PrinterApp
-│   │                       Ruta /viewer  → ViewerApp
+│   ├── index.html          HTML principal con Bootstrap 5.3.8 CDN dark mode
+│   ├── main.jsx            Entry point React + HashRouter
+│   │                         /printer → PrinterApp
+│   │                         /viewer  → ViewerApp
 │   ├── public/
-│   │   └── assets/         Imágenes estáticas servidas por Vite
-│   │       ├── banners-AdventureSup.png   Banner superior del Viewer
-│   │       ├── banners-Adventure_inf.png  Banner inferior del Viewer
-│   │       ├── qr-code.png               Código QR del header
+│   │   ├── favicon.png               Icono de la pestaña (MoscaPrintbox)
+│   │   ├── MoscaPrintbox.ico         Icono del .exe (generar desde el PNG)
+│   │   └── assets/
+│   │       ├── banners-AdventureSup.png   Banner superior Viewer (fijo 90px)
+│   │       ├── qr-code.png               QR del header (reemplazar por real)
 │   │       └── MoscaPrintbox.png         Logo/mascota
 │   ├── styles/
-│   │   └── global.css      Variables CSS globales y estilos base
+│   │   └── global.css      Estilos globales mínimos
 │   ├── shared/
-│   │   ├── api.js          Todas las llamadas HTTP centralizadas:
-│   │   │                     - findEvent()        buscar evento por código
-│   │   │                     - getEventPhotos()   galería paginada
-│   │   │                     - getPhotosToPrint() fotos nuevas a imprimir
-│   │   │                     - printJob()         enviar trabajo de impresión
-│   │   │                     - getConfig()        leer configuración
-│   │   │                     - saveConfig()       guardar configuración
+│   │   ├── api.js          Todas las llamadas HTTP centralizadas
 │   │   └── hooks/
 │   │       └── useInterval.js  Hook para polling periódico
 │   ├── viewer/
-│   │   ├── ViewerApp.jsx   Pantalla kiosco pública
-│   │   └── Viewer.css
+│   │   ├── ViewerApp.jsx   Pantalla pública del evento
+│   │   └── Viewer.css      Estilos del Viewer (header altura fija, etc.)
 │   └── printer/
 │       ├── PrinterApp.jsx  Panel de control del operador
-│       └── Printer.css
+│       └── Printer.css     Estilos del Printer
 │
 ├── config/
-│   ├── servidor_api.txt    Configuración de conexión (ver sección 6)
-│   └── textos.txt          Textos del Viewer (ver sección 6)
+│   ├── servidor_api.txt    Config de conexión (ver sección 7)
+│   └── textos.txt          Textos e idiomas del Viewer (ver sección 7)
 │
-├── descargas/              Imágenes ya descargadas e impresas.
-│                           Actúa como base de datos local para no
-│                           volver a imprimir las mismas fotos.
-│                           VACIAR MANUALMENTE entre eventos.
-│
-├── pdf/                    PDFs temporales generados para imprimir.
-│                           Se pueden borrar sin problema.
-│
-└── package.json            Dependencias y scripts del proyecto
+├── package.json            Dependencias, scripts y config del build (.exe)
+├── vite.config.js          Config de Vite (root: src, outDir: ../dist)
+└── README.txt              Este archivo
 
 
 ================================================================================
-5. CÓMO FUNCIONA LA APLICACIÓN
+6. CÓMO FUNCIONA LA APLICACIÓN
 ================================================================================
 
-5.1 PANEL DE CONTROL (Printer)
--------------------------------
-Es la pantalla que usa el operador del evento. Ruta: /#/printer
+6.1 PANEL DE CONTROL (Printer) — /#/printer
+--------------------------------------------
 
 FLUJO DE USO:
-  1. Al abrir la app aparece el Panel de Control.
-  2. Si se quiere cambiar la configuración (delay, timer, impresora o textos
-     del Viewer), pulsar "Editar", hacer los cambios y pulsar "Guardar".
-  3. Pulsar "▶ Encender". Si no hay evento configurado, aparece un modal
-     pidiendo el número de evento (solo el número, sin "ev-").
-     El prefijo "ev-" se añade automáticamente.
-  4. El programa se conecta a la API, obtiene el UUID del evento y empieza
-     a consultar la API cada X segundos (según el valor de Timer).
-  5. Cuando detecta fotos nuevas las descarga, las convierte a PDF y las
-     envía a la impresora con el delay configurado.
-  6. El log muestra en tiempo real todo lo que ocurre.
-  7. Al terminar el evento, pulsar "■ Apagar".
+  1. Abrir la app → aparece el Panel de Control.
+  2. Pulsar "Editar" para configurar:
+       - Delay (seg):    espera antes de imprimir (mínimo recomendado: 5)
+       - Timer (seg):    frecuencia de consulta a la API (mínimo: 5)
+       - Impresora:      seleccionar de la lista o dejar "Predeterminada"
+       - Textos Viewer:  editar los 4 idiomas y los 3 precios
+  3. Pulsar "▶ Encender":
+       - Si no hay evento, aparece modal para introducirlo
+         (solo el número sin "ev-", el prefijo se añade automáticamente)
+       - Conecta a la API y obtiene el UUID del evento
+       - Inicia el polling cada X segundos
+  4. Al detectar fotos nuevas:
+       - Descarga → AppData\descargas\
+       - Espera Delay segundos
+       - Convierte a PDF A4 centrado → AppData\pdf\
+       - Envía a impresora
+       - Incrementa contador
+  5. Log en tiempo real con colores por tipo de mensaje.
+  6. Al terminar → "■ Apagar".
 
 CAMBIAR DE EVENTO:
-  - El badge con el código del evento (ej: ev-1668042) tiene un ✏
-    que abre el modal para cambiarlo. Solo disponible cuando está apagado.
+  Badge del evento tiene ✏ → abre modal. Solo disponible con programa apagado.
 
-CAMPOS DE CONFIGURACIÓN:
-  - Delay (seg): segundos que espera desde que descarga la imagen hasta
-    que la imprime. Útil para asegurarse de que la imagen está completa.
-    Mínimo recomendado: 5 segundos.
-  - Timer (seg): cada cuántos segundos consulta la API buscando fotos nuevas.
-    Mínimo recomendado: 5 segundos.
-  - Impresora: selecciona la impresora física. Si se deja vacío usa la
-    predeterminada del sistema.
-
-5.2 VISOR DE EVENTO (Viewer)
------------------------------
-Es la pantalla pública orientada al cliente. Ruta: /#/viewer
+6.2 VISOR DE EVENTO (Viewer) — /#/viewer
+-----------------------------------------
 
 FLUJO DE USO:
-  1. Al abrir siempre aparece un modal pidiendo el número de evento.
-  2. Al confirmar, carga las fotos del evento en una galería de 2 filas
-     con hasta 5 fotos cada una (10 por página).
-  3. La galería se refresca automáticamente cada X segundos (Timer).
-  4. CLICK IZQUIERDO en una foto → la imprime.
-  5. CLICK DERECHO en una foto → la previsualiza en pantalla completa.
-  6. Si hay más de 10 fotos aparece un paginador en la parte inferior.
+  1. Siempre aparece modal pidiendo código de evento al arrancar.
+  2. Carga galería responsive de fotos (se adapta al ancho de pantalla).
+  3. Galería se refresca automáticamente según Timer.
+  4. CLICK en foto → modal con foto grande + selector de copias (1/2/3)
+  5. Cada opción muestra el precio configurado.
+  6. "Imprimir" → envía el trabajo al backend.
+  7. Paginación automática si hay muchas fotos.
 
-CAMBIAR DE EVENTO:
-  - Botón "✏ cambiar evento" debajo del contador de impresiones (header).
-
-ELEMENTOS VISUALES:
-  - Banner superior con textos en 4 idiomas (ES, EN, FR, DE)
-  - Código QR centrado en el header
-  - Contador de impresiones totales (top derecha)
-  - Banner inferior con los precios (1, 2 y 3 fotos) y nombre de empresa
+ELEMENTOS DE LA INTERFAZ:
+  - Header: imagen banner fija a 90px (los textos van pintados en la imagen)
+  - Footer Bootstrap negro: precios, empresa, contador, botón "Cambiar evento"
+  - Botón "Cambiar evento" amarillo (btn-warning) en el footer
 
 
 ================================================================================
-6. ARCHIVOS DE CONFIGURACIÓN
+7. ARCHIVOS DE CONFIGURACIÓN
 ================================================================================
 
-config/servidor_api.txt
+EN DESARROLLO: config/ (raíz del proyecto)
+EN PRODUCCIÓN: C:\Users\[usuario]\AppData\Local\PrintboxAdventures\config\
+
+config/servidor_api.txt — orden EXACTO, no cambiar posición de líneas
 -----------------------
-Formato: clave;valor (una por línea, en este orden exacto)
+  servidor;https://gestion.printboxweb.com
+  evento;ev-1668042
+  timer;5
+  impresora;Adobe PDF
+  delay;5
 
-  servidor;http://gestion.printboxweb.com   URL del servidor Printbox
-  evento;ev-1668042                          Código del evento actual
-  timer;5                                    Segundos entre consultas a la API
-  impresora;Adobe PDF                        Nombre exacto de la impresora
-  delay;5                                    Segundos de espera antes de imprimir
-
-NOTA: Este archivo se actualiza automáticamente al guardar desde la app.
-No hace falta editarlo a mano, pero se puede hacer si es necesario.
-
-config/textos.txt
+config/textos.txt — orden EXACTO, no cambiar posición de líneas
 -----------------
-Formato: clave:valor (una por línea, en este orden exacto)
-
   es:¡Consigue tu foto del evento!
   en:Get your event photo!
   fr:Obtenez votre photo!
   de:Hol dir dein Foto!
-  precio1:5                   Precio por 1 foto (sin símbolo €)
-  precio2:9                   Precio por 2 fotos
-  precio3:12                  Precio por 3 fotos
-  empresa:PrintboxAdventures  Nombre que aparece en el footer del Viewer
+  precio1:5
+  precio2:9
+  precio3:12
+  empresa:PrintboxAdventures
 
-NOTA: Estos textos se pueden editar también desde el Panel de Control
-pulsando "Editar" y modificando la sección "Textos del Visor".
-
-
-================================================================================
-7. ASSETS / IMÁGENES
-================================================================================
-
-Las imágenes estáticas de la interfaz están en:
-  src/public/assets/
-
-Para reemplazar cualquier imagen, poner el nuevo archivo en esa carpeta
-con el mismo nombre. Vite las sirve automáticamente desde la ruta /assets/.
-
-  banners-AdventureSup.png  →  Banner azul superior del Viewer (1500x120px aprox)
-  banners-Adventure_inf.png →  Banner azul inferior con precios (1500x60px aprox)
-  qr-code.png               →  Código QR del header (cualquier tamaño cuadrado)
-  MoscaPrintbox.png         →  Logo/mascota usado en modales y header del Printer
+Ambos archivos se actualizan automáticamente desde la app al pulsar "Guardar".
+Solo editar manualmente en caso de emergencia si la app no arranca.
 
 
 ================================================================================
-8. ARQUITECTURA TÉCNICA
+8. ASSETS / IMÁGENES
 ================================================================================
 
-PROBLEMA DE CORS Y SOLUCIÓN:
-  El navegador (Electron renderer) bloquea las peticiones directas a dominios
-  externos como gestion.printboxweb.com cuando el origen es localhost.
-  
-  Solución: todas las llamadas a la API de Printbox pasan por el backend
-  local Express (puerto 4000), que actúa de proxy y hace las peticiones
-  server-side sin restricciones CORS.
+Ubicación desarrollo:   src/public/assets/
+Ubicación producción:   resources/assets/ (dentro del .exe empaquetado)
+                        → configurado en package.json > build > extraResources
 
-  React → localhost:4000/printbox/... → gestion.printboxweb.com
+Para reemplazar: sustituir el archivo con el mismo nombre → npm run build.
 
-PROBLEMA DE CSRF 419 Y SOLUCIÓN:
-  Laravel protege sus rutas POST con tokens CSRF. El backend Node obtiene
-  primero el token visitando /sanctum/csrf-cookie, lo guarda en un CookieJar
-  (como haría un navegador) y lo envía en la cabecera X-XSRF-TOKEN de cada
-  petición POST.
+  banners-AdventureSup.png
+    Banner superior del Viewer. Se muestra a 90px de alto fijo (overflow:hidden).
+    Los textos van PINTADOS en la imagen, no superpuestos con código.
+    Reemplazar para personalizar por cliente/evento.
+
+  qr-code.png
+    QR del header. Reemplazar con el QR real (Instagram, web, etc.)
+    Tamaño cuadrado recomendado: 200x200px mínimo.
+
+  MoscaPrintbox.png
+    Logo/mascota principal. Usado en el Printer (header y modal de evento).
+    Para el .exe: convertir a .ico y guardar como src/public/MoscaPrintbox.ico
+
+
+================================================================================
+9. ARQUITECTURA TÉCNICA
+================================================================================
+
+STACK:
+  Frontend:  React 18 + Vite 7 + Bootstrap 5.3.8 CDN (dark mode)
+  Backend:   Node.js + Express 4 (puerto 4000, local)
+  Desktop:   Electron 40
+  Build:     electron-builder 26 → instalador NSIS (.exe)
+
+PROBLEMA CORS Y SOLUCIÓN:
+  El renderer no puede llamar directamente a gestion.printboxweb.com.
+  Solución: proxy en Express local.
+    React → localhost:4000/printbox/... → gestion.printboxweb.com
+
+PROBLEMA CSRF 419 Y SOLUCIÓN:
+  Laravel protege sus POST con tokens CSRF.
+  El backend visita /sanctum/csrf-cookie, guarda la cookie en un CookieJar
+  (tough-cookie + fetch-cookie) y envía el token en X-XSRF-TOKEN.
 
 IMPRESIÓN FÍSICA:
-  El navegador no tiene acceso a impresoras del sistema. Por eso existe el
-  backend Express local que:
-    1. Descarga la imagen desde la URL de Printbox
-    2. La guarda en descargas/
-    3. La convierte a PDF con PDFKit y Sharp (respetando orientación)
-    4. Espera los segundos de delay configurados
-    5. La envía a la impresora con pdf-to-printer
-    6. Incrementa el contador en C:/log/PBAcount.txt
+  1. Descarga imagen con node-fetch → AppData\descargas\
+  2. Lee metadatos de orientación con Sharp
+  3. Genera PDF A4 centrado con PDFKit → AppData\pdf\
+  4. Espera Delay segundos
+  5. Envía a impresora con pdf-to-printer (usa SumatraPDF embebido)
+  6. Incrementa contador en PBAcount.txt
 
-CONTADOR DE IMPRESIONES:
-  Se persiste en C:/log/PBAcount.txt (igual que en la versión Python).
-  Para resetear el contador, editar ese archivo y poner 0.
+CÓMO ELECTRON CARGA EL FRONTEND:
+  En DEV:   loadURL('http://localhost:3000')  ← Vite dev server
+  En PROD:  loadURL('http://localhost:4000')  ← Express sirve dist/
+  Razón: loadFile() rompe las rutas /assets/ en producción.
+         Cargando desde Express las rutas funcionan igual que en dev.
 
-POLLING:
-  Tanto el Viewer como el Printer usan el hook useInterval para consultar
-  la API periódicamente. El intervalo se pausa automáticamente cuando
-  el programa está apagado (uuid = null).
+DATOS EN PRODUCCIÓN VS DESARROLLO:
+  Dev:   datos en raíz del proyecto (config/, descargas/, pdf/)
+  Prod:  datos en AppData\Local\PrintboxAdventures\
+         → tiene permisos de escritura sin ser administrador
+         → Program Files NO tiene permisos de escritura (error EPERM)
+
+RUTAS REACT (HashRouter):
+  Se usa # en vez de BrowserRouter porque Electron no gestiona rutas HTML5.
+    /#/printer  →  PrinterApp
+    /#/viewer   →  ViewerApp
 
 
 ================================================================================
-9. CAMBIOS RESPECTO A LA VERSIÓN PYTHON
+10. FLUJO DE DATOS COMPLETO
+================================================================================
+
+CONEXIÓN AL EVENTO:
+  App → POST /printbox/find-event { code: "ev-XXXXXX" }
+       → gestion.printboxweb.com/api/v1/events/find
+       → { uuid: "xxxx-xxxx-..." }
+
+GALERÍA (Viewer):
+  App → POST /printbox/photos?page=N { event: uuid }
+       → gestion.printboxweb.com/api/v1/events/photos
+       → { data: [...fotos], last_page: N }
+
+FOTOS NUEVAS (Printer, polling):
+  App → POST /printbox/photos-to-print { event: uuid }
+       → gestion.printboxweb.com/api/v1/events/photos_two
+       → { values: [...fotos nuevas] }
+
+IMPRIMIR:
+  App → POST /print/job { imageUrl, imageName, printer, delay }
+       → descarga → PDF → imprime → { ok: true, count: N }
+
+CONFIG:
+  App → GET  /config  → lee servidor_api.txt + textos.txt
+  App → POST /config  → escribe servidor_api.txt + textos.txt
+
+
+================================================================================
+11. DEPENDENCIAS PRINCIPALES
+================================================================================
+
+PRODUCCIÓN (van dentro del .exe):
+  express          Servidor web local
+  cors             Cabeceras CORS
+  fs-extra         Utilidades de sistema de archivos
+  node-fetch       HTTP client (CommonJS, compatible con el proxy)
+  fetch-cookie     Gestión de cookies en node-fetch (para CSRF Laravel)
+  tough-cookie     CookieJar para mantener sesión
+  pdfkit           Generación de PDFs
+  sharp            Procesado de imágenes (orientación, metadatos)
+  pdf-to-printer   Impresión física (SumatraPDF embebido)
+
+DESARROLLO (no van en el .exe):
+  vite + @vitejs/plugin-react   Compilador y dev server
+  react + react-dom             Framework UI
+  react-router-dom              Enrutado HashRouter
+  electron                      Shell de escritorio
+  electron-builder              Generador de instaladores .exe
+  concurrently                  Lanza varios procesos en paralelo
+  wait-on                       Espera a que los servidores arranquen
+
+
+================================================================================
+12. CAMBIOS RESPECTO A LA VERSIÓN PYTHON ORIGINAL
 ================================================================================
 
 ELIMINADO:
-  - Modo FTP completo (ya no se usa)
-  - Dependencia de tkinter (interfaz gráfica de Python)
-  - win32print → reemplazado por pdf-to-printer (Node.js)
-  - img2pdf → reemplazado por PDFKit + Sharp (Node.js)
-  - Necesidad de tener un lector de PDF instalado (Sumatra PDF, etc.)
+  - Modo FTP completo (ya no lo usa el servidor Printbox)
+  - tkinter (interfaz gráfica Python)
+  - win32print → reemplazado por pdf-to-printer
+  - img2pdf → reemplazado por PDFKit + Sharp
+  - Sumatra PDF instalado por separado (ahora va embebido)
+  - Contador en C:/log/PBAcount.txt → ahora en AppData
 
 AÑADIDO:
-  - Interfaz web moderna con React (diseño oscuro, tipografía Syne)
-  - Dos ventanas separadas que se abren simultáneamente con Electron
-  - Modal al arrancar para introducir el número de evento sin tocar archivos
-  - Botón "Cambiar Evento" en ambas pantallas sin necesidad de recargar
-  - Proxy en el backend para resolver CORS y CSRF automáticamente
-  - Log en tiempo real con colores por tipo de mensaje
+  - Interfaz web moderna con React y Bootstrap 5 dark mode
+  - Dos ventanas independientes simultáneas
+  - Modal para introducir evento sin editar archivos
+  - Botón "Cambiar Evento" sin reiniciar
+  - Proxy automático CORS + CSRF
+  - Log en tiempo real con colores
   - Reloj de tiempo en ejecución
-  - Paginación dinámica de fotos en el Viewer
-  - Previsualización de fotos en modal (antes era ventana nueva de tkinter)
-  - Los assets (banners, QR, logo) son archivos reemplazables fácilmente
+  - Paginación dinámica de fotos
+  - Galería responsive
+  - Modal de impresión con selector de copias y precios
+  - Instalador .exe sin dependencias en el destino
+  - Datos en AppData (permisos correctos en Windows)
 
-MANTENIDO IGUAL:
-  - Formato de config/servidor_api.txt y config/textos.txt (compatible)
-  - Lógica de descarga: las fotos ya en descargas/ no se vuelven a imprimir
-  - Campo "times" respetado: si una foto tiene times=2 se imprime 2 veces
-  - Contador persistente en C:/log/PBAcount.txt
+MANTENIDO:
+  - Formato de config/*.txt (compatible con versión Python)
+  - Anti-duplicados: fotos en descargas/ no se reimprimen
+  - Campo "times": times=2 imprime 2 veces
   - Mismos 3 endpoints de la API de Printbox
 
 
 ================================================================================
-10. SOLUCIÓN DE PROBLEMAS CONOCIDOS
+13. SOLUCIÓN DE PROBLEMAS CONOCIDOS
 ================================================================================
 
-ERROR: "failed to fetch" al arrancar
-  → Verificar que el backend está corriendo: http://localhost:4000/health
-  → Asegurarse de ejecutar con "npm run dev" y no solo "vite"
+ERROR: "EPERM mkdir C:\Program Files\..." al instalar
+  → Ya corregido: los datos se guardan en AppData.
+  → Si persiste con versión antigua: desinstalar desde "Agregar o quitar
+    programas" y reinstalar con el .exe más reciente.
 
-ERROR 419 al conectar con el evento
-  → Error CSRF de Laravel. El backend lo gestiona automáticamente con
-    el CookieJar. Si persiste, reiniciar el backend (Ctrl+C y npm run dev).
+ERROR: "failed to fetch" en desarrollo
+  → Verificar http://localhost:4000/health devuelve { "ok": true }
+  → Usar siempre "npm run dev", no "vite" solo.
 
-ERROR: El Viewer no muestra fotos
-  → Verificar que el número de evento es correcto (solo números, sin "ev-")
-  → Comprobar en el log del Printer que la conexión fue exitosa
+ERROR 419 (CSRF) al conectar
+  → Reiniciar el backend. El CookieJar lo resuelve automáticamente.
+
+ERROR: Viewer sin fotos
+  → Verificar código de evento (solo números, sin "ev-")
+  → Comprobar log del Printer: ¿conectó correctamente?
   → Verificar conexión a internet
 
 ERROR: No imprime
-  → Verificar que el nombre de impresora en config es exactamente igual
-    al que aparece en "Dispositivos e impresoras" de Windows
-  → Dejar el campo impresora vacío para usar la predeterminada del sistema
-  → Revisar la carpeta pdf/ para ver si los PDFs se están generando
+  → Nombre de impresora debe ser EXACTAMENTE igual al de Windows
+  → Dejar vacío para usar la predeterminada
+  → Verificar que se generan PDFs en AppData\Local\PrintboxAdventures\pdf\
 
 Las fotos se reimprimen al reiniciar
-  → Es normal si se vació la carpeta descargas/. Esa carpeta es la memoria
-    del programa. No vaciarla hasta que termine el evento.
+  → No vaciar AppData\Local\PrintboxAdventures\descargas\ hasta fin de evento.
+  → Esa carpeta es la memoria del programa.
 
-El modal de evento no aparece en el Viewer
-  → El Viewer siempre muestra el modal al arrancar. Si no aparece,
-    hacer Ctrl+R en la ventana del Viewer para recargar.
+El banner superior crece con la pantalla
+  → Verificar que Viewer.css tiene la regla:
+      .viewer-app > header { height: 90px !important; overflow: hidden !important; }
+
+El icono del .exe es el de Electron
+  → Falta src/public/MoscaPrintbox.ico
+  → Convertir en https://convertio.co/png-ico/ y hacer npm run build.
+
+Las ventanas abren en blanco en producción
+  → El backend tarda en arrancar. El main.js espera 2 segundos.
+  → Si no es suficiente, aumentar el setTimeout en electron/main.js.
+
 
 ================================================================================
-  Desarrollado por Alejandro · PrintboxAdventures 2026
+14. PENDIENTES / IDEAS DE MEJORA
+================================================================================
+
+FUNCIONALES:
+  [ ] Versión visible en la app (header del Printer)
+  [ ] Auto-arranque al iniciar Windows
+  [ ] Minimizar a bandeja del sistema (system tray)
+  [ ] Pantalla splash mientras arranca el backend
+  [ ] Modo quiosco: pantalla completa sin menú de Electron
+  [ ] Notificación toast al imprimir
+  [ ] Sonido de confirmación al imprimir
+
+VIEWER:
+  [ ] Autoplay / slideshow automático
+  [ ] QR dinámico con URL del visor web
+  [ ] Búsqueda de fotos por número
+
+PRINTER:
+  [ ] Historial de impresiones con miniatura y hora
+  [ ] Reimprimir última foto con un click
+  [ ] Alerta si impresora offline
+  [ ] Estadísticas: fotos impresas, ingresos estimados
+
+TÉCNICAS:
+  [ ] Auto-actualización (electron-updater)
+  [ ] Log de errores en disco
+  [ ] Reconexión automática si cae la API
+
+
+================================================================================
+  PrintboxAdventures v1.0.0 · Desarrollado por Alejandro · 2026
+  Soporte API Printbox: eventos@printboxweb.com · 623 040 445
 ================================================================================

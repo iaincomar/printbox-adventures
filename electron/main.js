@@ -3,7 +3,6 @@ const path = require('path')
 
 const isDev = !app.isPackaged
 
-// Arranca el backend Express embebido en producción
 if (!isDev) {
   require('../backend/server')
 }
@@ -24,15 +23,24 @@ function createWindow(route, width, height, title) {
   if (isDev) {
     win.loadURL(`http://localhost:3000/#${route}`)
   } else {
-    win.loadFile(path.join(__dirname, '../dist/index.html'), { hash: route })
+    // En producción cargar desde Express (puerto 4000) para que /assets/ funcione
+    win.loadURL(`http://localhost:4000/#${route}`)
   }
 
   return win
 }
 
 app.whenReady().then(() => {
-  createWindow('/printer', 1200, 750, 'PrintboxAdventures — Panel de Control')
-  createWindow('/viewer', 1500, 850, 'PrintboxAdventures — Visor de Evento')
+  if (!isDev) {
+    // Esperar a que el backend arranque antes de abrir ventanas
+    setTimeout(() => {
+      createWindow('/printer', 1200, 750, 'PrintboxAdventures — Panel de Control')
+      createWindow('/viewer', 1500, 850, 'PrintboxAdventures — Visor de Evento')
+    }, 2000)
+  } else {
+    createWindow('/printer', 1200, 750, 'PrintboxAdventures — Panel de Control')
+    createWindow('/viewer', 1500, 850, 'PrintboxAdventures — Visor de Evento')
+  }
 })
 
 app.on('window-all-closed', () => {
