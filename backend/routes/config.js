@@ -2,33 +2,22 @@ const express = require('express')
 const router = express.Router()
 const path = require('path')
 const fs = require('fs-extra')
+const os = require('os')
 
-const CONFIG_DIR = path.join(process.cwd(), 'config')
+function getConfigDir(req) {
+  const dataDir = req.app.locals.dataDir ||
+    path.join(os.homedir(), 'AppData', 'Local', 'PrintboxAdventures')
+  return path.join(dataDir, 'config')
+}
 
-// GET /config — lee toda la configuración
-router.get('/', (_req, res) => {
+router.get('/', (req, res) => {
   try {
+    const CONFIG_DIR = getConfigDir(req)
     const apiFile = path.join(CONFIG_DIR, 'servidor_api.txt')
     const textosFile = path.join(CONFIG_DIR, 'textos.txt')
 
-    const config = {
-      servidor: 'http://gestion.printboxweb.com',
-      evento: '',
-      timer: 5,
-      impresora: '',
-      delay: 5,
-    }
-
-    const textos = {
-      text_es: '',
-      text_en: '',
-      text_fr: '',
-      text_de: '',
-      precio1: '',
-      precio2: '',
-      precio3: '',
-      empresa: '',
-    }
+    const config = { servidor: 'http://gestion.printboxweb.com', evento: '', timer: 5, impresora: '', delay: 5 }
+    const textos = { text_es: '', text_en: '', text_fr: '', text_de: '', precio1: '', precio2: '', precio3: '', empresa: '' }
 
     if (fs.existsSync(apiFile)) {
       const lines = fs.readFileSync(apiFile, 'utf8').split('\n')
@@ -57,11 +46,11 @@ router.get('/', (_req, res) => {
   }
 })
 
-// POST /config — guarda la configuración
 router.post('/', (req, res) => {
   try {
-    const { config, textos } = req.body
+    const CONFIG_DIR = getConfigDir(req)
     fs.ensureDirSync(CONFIG_DIR)
+    const { config, textos } = req.body
 
     if (config) {
       const lines = [

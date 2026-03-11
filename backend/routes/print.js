@@ -4,102 +4,105 @@ const path = require('path')
 const fs = require('fs-extra')
 const fetch = require('node-fetch')
 const PDFDocument = require('pdfkit')
-const { print, getPrinters } = require('pdf-to-printer')
+const os = require('os')
 
-const DESCARGAS = path.join(process.cwd(), 'descargas')
-const PDF_DIR = path.join(process.cwd(), 'pdf')
-const LOG_PATH = 'C:/log/PBAcount.txt'
+function getDataDir(req) {
+  return req.app.locals.dataDir ||
+    path.join(os.homedir(), 'AppData', 'Local', 'PrintboxAdventures')
+}
 
-// GET /print/printers — lista las impresoras del sistema
+// GET /print/printers
 router.get('/printers', async (_req, res) => {
   try {
+    const { getPrinters } = require('pdf-to-printer')
     const printers = await getPrinters()
     res.json({ printers: printers.map(p => p.name) })
-  } catch (err) {
-    // En Linux/dev devolvemos lista vacía
+  } catch {
     res.json({ printers: [] })
   }
 })
 
-// GET /print/count — devuelve el total de impresiones
-router.get('/count', (_req, res) => {
+// GET /print/count
+router.get('/count', (req, res) => {
   try {
-    const count = parseInt(fs.readFileSync(LOG_PATH, 'utf8').trim()) || 0
+    const logPath = req.app.locals.logPath ||
+      path.join(getDataDir(req), 'PBAcount.txt')
+    const count = parseInt(fs.readFileSync(logPath, 'utf8')) || 0
     res.json({ count })
   } catch {
     res.json({ count: 0 })
   }
 })
 
-// POST /print/job — descarga imagen, convierte a PDF e imprime
-// Body: { imageUrl: string, imageName: string, printer: string, delay: number }
+// POST /print/job
 router.post('/job', async (req, res) => {
   const { imageUrl, imageName, printer, delay = 5 } = req.body
+  const DATA_DIR = getDataDir(req)
+  const descargasDir = path.join(DATA_DIR, 'descargas')
+  const pdfDir = path.join(DATA_DIR, 'pdf')
+  const logPath = req.app.locals.logPath || path.join(DATA_DIR, 'PBAcount.txt')
 
-  if (!imageUrl || !imageName) {
-    return res.status(400).json({ error: 'imageUrl e imageName son obligatorios' })
-  }
+  fs.ensureDirSync(descargasDir)
+  fs.ensureDirSync(pdfDir)
+
+  const imagePath = path.join(descargasDir, imageName)
+  const pdfPath = path.join(pdfDir, imageName.replace(/\.[^.]+$/, '.pdf'))
 
   try {
     // 1. Descargar imagen
-    const response = await fetch(imageUrl)
-    if (!response.ok) throw new Error(`No se pudo descargar: ${response.status}`)
-    const buffer = await response.buffer()
+    const imgRes = await fetch(imageUrl)
+    if (!imgRes.ok) throw new Error(`No se pudo descargar la imagen: ${imgRes.status}`)
+    const buffer = await imgRes.buffer()
+    fs.writeFileSync(imagePath, buffer)
 
-    const imgPath = path.join(DESCARGAS, imageName)
-    await fs.writeFile(imgPath, buffer)
-
-    // 2. Convertir a PDF con PDFKit (respeta orientación)
-    const pdfPath = path.join(PDF_DIR, `${imageName}.pdf`)
-    await convertImageToPdf(imgPath, pdfPath)
-
-    // 3. Delay configurable antes de imprimir (asegura que la imagen esté completa)
+    // 2. Delay
     await new Promise(r => setTimeout(r, delay * 1000))
 
+    // 3. Convertir a PDF
+    await convertImageToPdf(imagePath, pdfPath)
+
     // 4. Imprimir
-    if (printer) {
-      await print(pdfPath, { printer })
-    } else {
-      await print(pdfPath)
-    }
+    const { print } = require('pdf-to-printer')
+    const options = printer ? { printer } : {}
+    await print(pdfPath, options)
 
     // 5. Incrementar contador
-    let count = 0
-    try {
-      count = parseInt(fs.readFileSync(LOG_PATH, 'utf8').trim()) || 0
-    } catch {}
-    count++
-    fs.writeFileSync(LOG_PATH, String(count))
+    const current = parseInt(fs.readFileSync(logPath, 'utf8')) || 0
+    const newCount = current + 1
+    fs.writeFileSync(logPath, String(newCount))
 
-    res.json({ ok: true, count, imageName })
+    res.json({ ok: true, count: newCount })
   } catch (err) {
-    console.error('[print/job]', err)
     res.status(500).json({ error: err.message })
   }
 })
 
-// Convierte una imagen a PDF manteniendo proporciones
-function convertImageToPdf(imgPath, pdfPath) {
+async function convertImageToPdf(imagePath, pdfPath) {
+  const sharp = require('sharp')
+  const meta = await sharp(imagePath).metadata()
+  const w = meta.width || 800
+  const h = meta.height || 600
+  const isLandscape = w > h
+
   return new Promise((resolve, reject) => {
-    try {
-      const sharp = require('sharp')
-      sharp(imgPath).metadata().then(meta => {
-        const { width, height } = meta
-        const doc = new PDFDocument({
-          size: [width, height],
-          margin: 0,
-          autoFirstPage: true,
-        })
-        const stream = fs.createWriteStream(pdfPath)
-        doc.pipe(stream)
-        doc.image(imgPath, 0, 0, { width, height })
-        doc.end()
-        stream.on('finish', resolve)
-        stream.on('error', reject)
-      })
-    } catch (err) {
-      reject(err)
-    }
+    const doc = new PDFDocument({
+      size: 'A4',
+      layout: isLandscape ? 'landscape' : 'portrait',
+      margin: 0,
+    })
+    const stream = fs.createWriteStream(pdfPath)
+    doc.pipe(stream)
+    const pageW = doc.page.width
+    const pageH = doc.page.height
+    const scale = Math.min(pageW / w, pageH / h)
+    const dw = w * scale
+    const dh = h * scale
+    const x = (pageW - dw) / 2
+    const y = (pageH - dh) / 2
+    doc.image(imagePath, x, y, { width: dw, height: dh })
+    doc.end()
+    stream.on('finish', resolve)
+    stream.on('error', reject)
   })
 }
 
