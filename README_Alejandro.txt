@@ -481,10 +481,9 @@ Las ventanas abren en blanco en producción
 
 FUNCIONALES:
   [ ] Versión visible en la app (header del Printer)
-  [ ] Auto-arranque al iniciar Windows
-  [ ] Minimizar a bandeja del sistema (system tray)
-  [ ] Pantalla splash mientras arranca el backend
-  [ ] Modo quiosco: pantalla completa sin menú de Electron
+  [x] Minimizar a bandeja del sistema (system tray) — X minimiza, Ctrl+Q cierra
+  [x] Pantalla splash mientras arranca el backend — logo + barra de progreso
+  [x] Modo quiosco: Viewer en pantalla completa sin menú (F11/Escape para salir)
   [ ] Notificación toast al imprimir
   [ ] Sonido de confirmación al imprimir
 
@@ -496,14 +495,52 @@ VIEWER:
 PRINTER:
   [ ] Historial de impresiones con miniatura y hora
   [ ] Reimprimir última foto con un click
-  [ ] Alerta si impresora offline
+  [x] Alerta si impresora offline — barra roja con botón reintentar, comprueba cada 30s
   [ ] Estadísticas: fotos impresas, ingresos estimados
 
 TÉCNICAS:
   [ ] Auto-actualización (electron-updater)
   [ ] Log de errores en disco
-  [ ] Reconexión automática si cae la API
+  [x] Reconexión automática si cae la API
 
+
+================================================================================
+15. MEJORAS IMPLEMENTADAS — DETALLE TÉCNICO
+================================================================================
+
+MODO QUIOSCO (electron/main.js)
+  El Viewer se abre con kiosk:true + fullscreen:true en Electron.
+  El operador puede salir del modo quiosco pulsando F11 o Escape.
+  El Printer se abre normal (sin quiosco) para que el operador lo controle.
+
+SPLASH SCREEN (electron/main.js)
+  En producción, mientras Express tarda 2.5s en arrancar, se muestra una
+  ventana sin bordes con el logo MoscaPrintbox, título y barra de progreso
+  animada. Se cierra automáticamente cuando las ventanas principales cargan.
+
+BANDEJA DEL SISTEMA (electron/main.js)
+  La X del Panel de Control minimiza a la bandeja en vez de cerrar la app.
+  Icono en la bandeja con menú contextual:
+    - Mostrar Panel de Control
+    - Mostrar Visor
+    - Salir (cierra todo)
+  Doble click en el icono del tray → muestra el Panel de Control.
+  Para salir de verdad: Ctrl+Q desde cualquier ventana, o menú del tray.
+
+RECONEXIÓN AUTOMÁTICA (src/printer/PrinterApp.jsx)
+  Si la API de Printbox falla durante el polling, la app:
+    1. Muestra barra amarilla "Sin conexión con la API"
+    2. Llama a tryReconnect() automáticamente
+    3. Reintenta cada 5s, 10s, 15s... hasta máximo 30s entre intentos
+    4. Al reconectar: vuelve al estado normal y sigue imprimiendo
+  No requiere intervención del operador.
+
+ALERTA IMPRESORA OFFLINE (src/printer/PrinterApp.jsx)
+  Al arrancar y cada 30s, comprueba si la impresora configurada está en
+  la lista de impresoras del sistema.
+  Si no la encuentra: barra roja en la parte superior con el nombre de la
+  impresora y botón "Reintentar".
+  Si no hay impresora configurada (usa predeterminada): no muestra alerta.
 
 ================================================================================
   PrintboxAdventures v1.0.0 · Desarrollado por Alejandro · 2026

@@ -21,13 +21,33 @@ export default function PrinterApp() {
   const [printCount, setPrintCount] = useState(0)
   const [logs, setLogs] = useState([])
   const [elapsed, setElapsed] = useState(0)
+  const [printerStatus, setPrinterStatus] = useState('ok')   // 'ok' | 'offline'
+  const [apiStatus, setApiStatus]         = useState('ok')   // 'ok' | 'error'
+  const [reconnecting, setReconnecting]   = useState(false)
+  const reconnectAttemptsRef              = useRef(0)
   const logsRef = useRef(null)
 
+  // ── CHECK IMPRESORA ─────────────────────────────────────────────────────────
+  async function checkPrinterStatus(printerName) {
+    try {
+      const list = await getPrinters()
+      setPrinters(list)
+      if (!printerName) { setPrinterStatus('ok'); return }
+      const found = list.some(p => p === printerName || p.includes(printerName))
+      setPrinterStatus(found ? 'ok' : 'offline')
+    } catch { setPrinterStatus('offline') }
+  }
+
   useEffect(() => {
-    getConfig().then(d => { if (d.config) setConfig(d.config); if (d.textos) setTextos(d.textos) }).catch(() => {})
-    getPrinters().then(setPrinters).catch(() => {})
+    getConfig().then(d => {
+      if (d.config) { setConfig(d.config); checkPrinterStatus(d.config.impresora) }
+      if (d.textos) setTextos(d.textos)
+    }).catch(() => {})
     getPrintCount().then(setPrintCount).catch(() => {})
   }, [])
+
+  // Verificar impresora cada 30s
+  useInterval(() => checkPrinterStatus(config.impresora), 30000)
 
   useEffect(() => { if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight }, [logs])
   useEffect(() => { if (showEventModal) setTimeout(() => eventInputRef.current?.focus(), 50) }, [showEventModal])
@@ -82,10 +102,34 @@ export default function PrinterApp() {
     addLog('— Programa detenido.', 'warn')
   }
 
+  // ── 2. RECONEXIÓN AUTOMÁTICA ─────────────────────────────────────────────────
+  async function tryReconnect() {
+    if (reconnecting || !config.evento) return
+    setReconnecting(true)
+    reconnectAttemptsRef.current += 1
+    const attempt = reconnectAttemptsRef.current
+    addLog(`↻ Intentando reconectar... (intento ${attempt})`, 'warn')
+    try {
+      const newUuid = await findEvent(config.evento)
+      setUuid(newUuid)
+      setApiStatus('ok')
+      setReconnecting(false)
+      reconnectAttemptsRef.current = 0
+      addLog(`✓ Reconectado al evento ${config.evento}`, 'success')
+    } catch {
+      setReconnecting(false)
+      const delay = Math.min(30, attempt * 5)
+      addLog(`✗ Reconexión fallida. Próximo intento en ${delay}s...`, 'error')
+      setTimeout(tryReconnect, delay * 1000)
+    }
+  }
+
   const checkAndPrint = useCallback(async () => {
     if (!uuid) return
     try {
       const photos = await getPhotosToPrint(uuid)
+      setApiStatus('ok')
+      reconnectAttemptsRef.current = 0
       if (!photos?.length) return
       for (const photo of photos) {
         const baseUrl = photo.uri_full
@@ -103,12 +147,17 @@ export default function PrinterApp() {
             setPrintedImages(prev => [...prev, imageName])
             setLastPhoto(baseUrl); setPrintCount(result.count)
             addLog(`✓ Impreso: ${imageName} (total: ${result.count})`, 'success')
-          } catch (err) { addLog(`✗ Error: ${err.message}`, 'error') }
+          } catch (err) { addLog(`✗ Error impresión: ${err.message}`, 'error') }
         }
       }
       addLog('... Esperando más imágenes.')
-    } catch (e) { addLog(`✗ Error API: ${e.message}`, 'error') }
-  }, [uuid, printedImages, config.impresora, config.delay])
+    } catch (e) {
+      setApiStatus('error')
+      addLog(`✗ Error API: ${e.message} — iniciando reconexión...`, 'error')
+      setUuid(null)
+      tryReconnect()
+    }
+  }, [uuid, printedImages, config.impresora, config.delay, config.evento])
 
   useInterval(checkAndPrint, running ? config.timer * 1000 : null)
 
@@ -122,6 +171,28 @@ export default function PrinterApp() {
 
   return (
     <div className="printer-app d-flex flex-column vh-100 bg-dark text-light">
+
+      {/* ── 3. ALERTA IMPRESORA OFFLINE ──────────────────────────────────────── */}
+      {printerStatus === 'offline' && config.impresora && (
+        <div className="alert alert-danger rounded-0 mb-0 py-2 px-4 d-flex align-items-center gap-2 border-0 flex-shrink-0" role="alert">
+          <i className="bi bi-printer-fill fs-5" />
+          <strong>Impresora no encontrada:</strong>
+          <span className="font-mono">"{config.impresora}"</span>
+          <span className="ms-1">— Verifica que está encendida y conectada.</span>
+          <button className="btn btn-sm btn-outline-light ms-auto font-mono" onClick={() => checkPrinterStatus(config.impresora)}>
+            <i className="bi bi-arrow-clockwise me-1" />Reintentar
+          </button>
+        </div>
+      )}
+
+      {/* ── 2. ALERTA RECONECTANDO ───────────────────────────────────────────── */}
+      {apiStatus === 'error' && (
+        <div className="alert alert-warning rounded-0 mb-0 py-2 px-4 d-flex align-items-center gap-2 border-0 flex-shrink-0" role="alert">
+          <div className="spinner-border spinner-border-sm text-warning" role="status" />
+          <strong>Sin conexión con la API.</strong>
+          <span>Intentando reconectar automáticamente...</span>
+        </div>
+      )}
 
       {/* MODAL EVENTO — Bootstrap modal */}
       {showEventModal && (
