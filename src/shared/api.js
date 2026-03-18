@@ -93,3 +93,15 @@ export async function saveConfig(config, textos) {
   })
   return res.json()
 }
+
+/** Sube una foto al evento (base64) con número de copias */
+export async function sendPhoto({ event, image, times = 1 }) {
+  const res = await fetch(`${BACKEND_URL}/printbox/photo-send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event, image, times }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.error?.message || data?.message || 'Error al enviar foto')
+  return data
+}

@@ -50,7 +50,7 @@ if (fs.existsSync(distPath)) {
 }
 
 // Servir assets (banners, logos, qr) desde extraResources
-const assetsPath = isPackaged
+const assetsPath = (isPackaged && process.resourcesPath)
   ? path.join(process.resourcesPath, 'assets')
   : path.join(__dirname, '../src/public/assets')
 app.use('/assets', express.static(assetsPath))
