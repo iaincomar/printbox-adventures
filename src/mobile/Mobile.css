@@ -5,6 +5,12 @@
   font-family: system-ui, sans-serif;
   max-width: 480px;
   margin: 0 auto;
+  overflow-x: hidden;
+}
+
+html, body {
+  overflow-x: hidden;
+  background: #0a0a0f;
 }
 
 /* Header */
@@ -120,13 +126,7 @@
   to   { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* Fix scroll en galería */
-.mobile-app {
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Fix altura mínima para que el contenido no quede cortado */
+/* Fix altura mínima para que el contenido no quede cortado por el footer */
 .mobile-gallery-grid {
-  padding-bottom: 100px;
+  padding-bottom: 120px;
 }

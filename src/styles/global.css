@@ -14,3 +14,10 @@ body { font-family: 'Syne', sans-serif; }
 ::-webkit-scrollbar-thumb { background: #2a2a3d; border-radius: 3px; }
 
 html, body, #root { height: 100%; overflow: hidden; }
+
+/* La app móvil necesita scroll natural */
+body:has(.mobile-app),
+body:has(.mobile-app) #root {
+  overflow: auto !important;
+  height: auto !important;
+}

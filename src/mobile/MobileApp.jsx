@@ -59,6 +59,23 @@ export default function MobileApp() {
   const [sending, setSending]     = useState(false)
   const [toast, setToast]         = useState(null)
 
+  // Forzar scroll en body cuando se monta la app móvil
+  useEffect(() => {
+    document.documentElement.style.overflow = 'auto'
+    document.documentElement.style.height   = 'auto'
+    document.body.style.overflow = 'auto'
+    document.body.style.height   = 'auto'
+    const root = document.getElementById('root')
+    if (root) { root.style.overflow = 'auto'; root.style.height = 'auto' }
+    return () => {
+      document.documentElement.style.overflow = ''
+      document.documentElement.style.height   = ''
+      document.body.style.overflow = ''
+      document.body.style.height   = ''
+      if (root) { root.style.overflow = ''; root.style.height = '' }
+    }
+  }, [])
+
   // Leer evento de la URL (?evento=ev-XXXX)
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
@@ -95,40 +112,29 @@ export default function MobileApp() {
   async function loadPhotos(id, p) {
     setLoadingPhotos(true)
     try {
+      // Cargar primera página
       const { photos: data, lastPage: lp } = await getEventPhotos(id || uuid, p)
       setPhotos(data)
       setLastPage(lp)
       setPage(p)
+      // Si hay más páginas, cargarlas todas
+      if (lp > 1) {
+        const rest = []
+        for (let i = 2; i <= lp; i++) {
+          const { photos: more } = await getEventPhotos(id || uuid, i)
+          rest.push(...more)
+        }
+        setPhotos(prev => [...prev, ...rest])
+        setPage(lp)
+      }
     } catch { showToast('Error cargando fotos') }
     finally { setLoadingPhotos(false) }
   }
 
-  async function loadMore() {
-    if (loadingMore || page >= lastPage) return
-    const currentUuid = uuidRef.current || uuid
-    if (!currentUuid) return
-    setLoadingMore(true)
-    try {
-      const nextPage = page + 1
-      const { photos: data, lastPage: lp } = await getEventPhotos(currentUuid, nextPage)
-      setPhotos(prev => [...prev, ...data])
-      setLastPage(lp)
-      setPage(nextPage)
-    } catch { showToast('Error cargando más fotos') }
-    finally { setLoadingMore(false) }
-  }
+  async function loadMore() {}  // ya no se usa, se carga todo de golpe
 
-  // Intersection Observer para scroll infinito
-  useEffect(() => {
-    if (!loaderRef.current) return
-    const el = loaderRef.current
-    const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting) loadMore() },
-      { threshold: 0.1 }
-    )
-    observer.observe(el)
-    return () => observer.unobserve(el)
-  }, [page, lastPage, loadingMore, uuid])
+  // Observer ya no necesario pero se mantiene por si acaso
+  useEffect(() => {}, [page, lastPage, loadingMore, uuid])
 
   function toggleSelect(photo) {
     setSelected(prev => {
@@ -204,22 +210,30 @@ export default function MobileApp() {
     ...capturedPhotos.map(p => p.copies)
   ].reduce((a, b) => a + b, 0)
 
+  // Precio por foto según copias seleccionadas:
+  // 1 copia = precio1, 2 copias = precio2, 3 copias = precio3
+  // Cada foto se cobra de forma independiente
+  const priceForPhoto = (copies) => {
+    const c = Math.min(copies, 3)
+    // Fallback a precios por defecto si textos no cargó
+    const p1 = parseFloat(textos.precio1) || 5
+    const p2 = parseFloat(textos.precio2) || 9
+    const p3 = parseFloat(textos.precio3) || 12
+    const pr = [0, p1, p2, p3]
+    return pr[c] || 0
+  }
+
   const precio = (copies) => {
-    if (copies === 1) return textos.precio1 ? `${textos.precio1}€` : '—'
-    if (copies === 2) return textos.precio2 ? `${textos.precio2}€` : '—'
-    return textos.precio3 ? `${textos.precio3}€` : '—'
+    const p = priceForPhoto(copies)
+    return p ? `${p.toFixed(2)}€` : '—'
   }
 
   const totalPrice = () => {
     const all = [
-      ...selected.map(p => ({ copies: p.copies })),
-      ...capturedPhotos.map(p => ({ copies: p.copies })),
+      ...selected.map(p => p.copies),
+      ...capturedPhotos.map(p => p.copies),
     ]
-    return all.reduce((sum, p) => {
-      const c = Math.min(p.copies, 3)
-      const pr = [0, parseFloat(textos.precio1)||0, parseFloat(textos.precio2)||0, parseFloat(textos.precio3)||0]
-      return sum + (pr[c] || 0)
-    }, 0).toFixed(2)
+    return all.reduce((sum, copies) => sum + priceForPhoto(copies), 0).toFixed(2)
   }
 
   async function handleSendOrder() {
@@ -302,16 +316,17 @@ export default function MobileApp() {
 
   // PASO 2 — GALERÍA
   if (step === STEP_GALLERY) return (
-    <div className="mobile-app" style={{ overflowY: "auto" }}>
+    <div className="mobile-app">
       <div className="mobile-header d-flex align-items-center gap-2">
         <img src="/assets/MoscaPrintbox.png" alt="" style={{ width: 32, borderRadius: 6 }} />
         <div className="flex-grow-1">
           <div className="fw-bold" style={{ fontSize: 14, color: '#f7c604' }}>Elige tus fotos</div>
           <div className="text-secondary" style={{ fontSize: 11 }}>Toca para seleccionar • ev-{eventCode}</div>
         </div>
-        {selected.length > 0 && (
-          <span className="badge bg-warning text-dark fw-bold">{selected.length} sel.</span>
-        )}
+        <button className="btn btn-sm btn-outline-warning" style={{ fontSize: 11 }}
+          onClick={() => { setStep(STEP_EVENT); setPhotos([]); setSelected([]); setCapturedPhotos([]) }}>
+          <i className="bi bi-pencil" />
+        </button>
       </div>
 
       <StepDots />
@@ -354,18 +369,19 @@ export default function MobileApp() {
         )}
       </div>
 
-      {/* Footer sticky */}
-      <div className="px-3 pb-4 pt-2" style={{ position: 'sticky', bottom: 0, background: '#0a0a0f', borderTop: '1px solid #222', zIndex: 50 }}>
-        <button
-          className="btn btn-warning w-100 fw-bold"
-          style={{ fontSize: 16 }}
-          disabled={selected.length === 0 && capturedPhotos.length === 0}
-          onClick={() => setStep(STEP_ORDER)}
-        >
-          <i className="bi bi-bag-check me-2" />
-          Ver pedido ({selected.length + capturedPhotos.length} fotos)
-        </button>
-      </div>
+      {/* Barra flotante — aparece al seleccionar fotos */}
+      {(selected.length > 0 || capturedPhotos.length > 0) && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', zIndex: 9999, width: '90%', maxWidth: 420 }}>
+          <button
+            className="btn btn-warning w-100 fw-bold shadow-lg"
+            style={{ fontSize: 16, borderRadius: 30, padding: '14px 24px' }}
+            onClick={() => setStep(STEP_ORDER)}
+          >
+            <i className="bi bi-bag-check me-2" />
+            Ver pedido ({selected.length + capturedPhotos.length} foto{selected.length + capturedPhotos.length > 1 ? 's' : ''})
+          </button>
+        </div>
+      )}
 
       {toast && <div className="mobile-toast">{toast}</div>}
     </div>
