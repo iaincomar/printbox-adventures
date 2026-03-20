@@ -1,6 +1,6 @@
 {
   "name": "printbox-adventures",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "PrintboxAdventures - Sistema de impresión de fotos para eventos",
   "author": "Alejandro",
   "main": "electron/main.js",
