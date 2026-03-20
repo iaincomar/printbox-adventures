@@ -1,6 +1,6 @@
 {
   "name": "printbox-adventures",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "PrintboxAdventures - Sistema de impresión de fotos para eventos",
   "author": "Alejandro",
   "main": "electron/main.js",
@@ -12,6 +12,7 @@
   "dependencies": {
     "axios": "^1.6.0",
     "cors": "^2.8.5",
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "fetch-cookie": "^3.2.0",

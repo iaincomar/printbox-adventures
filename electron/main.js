@@ -1,5 +1,7 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
+autoUpdater.logger = require('electron-log')
+autoUpdater.logger.transports.file.level = 'info'
 const path = require('path')
 const os = require('os')
 
