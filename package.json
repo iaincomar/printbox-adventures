@@ -6,7 +6,7 @@
   "main": "electron/main.js",
   "scripts": {
     "dev": "concurrently -n REACT,BACKEND,ELECTRON -c cyan,yellow,magenta \"vite --port 3000\" \"node backend/server.js\" \"wait-on http://localhost:3000 && wait-on http://localhost:4000/health && electron .\"",
-    "build": "vite build && electron-builder",
+    "build": "vite build && electron-builder --publish always",
     "preview": "vite preview"
   },
   "dependencies": {

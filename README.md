@@ -392,6 +392,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ Reconexión automática | `PrinterApp.jsx` | Si la API cae, reintenta cada 5s→10s→...→30s automáticamente |
 | ✅ Alerta impresora offline | `PrinterApp.jsx` | Barra roja si la impresora no se encuentra. Comprueba cada 30s |
 | ✅ App móvil web | `mobile/MobileApp.jsx` | Galería completa, cámara, selección, pedido y precios |
+| ✅ Auto-actualización | `electron/main.js` | Comprueba GitHub Releases al arrancar. Barra amarilla de aviso + instala al cerrar |
 
 ---
 
@@ -451,8 +452,43 @@ La IP en `src/shared/api.js` debe ser la IP del PC, no `localhost`. Solo para de
 - [ ] PWA manifest para instalar en pantalla de inicio
 
 ### Técnicas
-- [ ] Auto-actualización (electron-updater)
+- [x] Auto-actualización (electron-updater) — GitHub Releases
 - [ ] Log de errores en disco
+
+---
+
+## 16. Publicar actualizaciones
+
+Las actualizaciones se publican en **GitHub Releases** y los usuarios las reciben automáticamente al arrancar la app.
+
+### Pasos para publicar una versión nueva
+
+1. Incrementa la versión en `package.json`:
+```json
+"version": "1.0.1"
+```
+
+2. Haz commit y push:
+```bash
+git add .
+git commit -m "feat: descripción de los cambios"
+git push
+```
+
+3. Genera el token en https://github.com/settings/tokens (scope: `repo`) y ejecuta:
+```powershell
+$env:GH_TOKEN="tu_token_aqui"
+npm run build
+```
+
+4. Ve a https://github.com/iaincomar/printbox-adventures/releases y pulsa **"Publish release"** en el borrador.
+
+### Qué ven los usuarios
+- Al arrancar la app comprueba automáticamente si hay versión nueva en GitHub
+- Si la hay → barra amarilla en el Panel de Control: *"Hay una actualización disponible"*
+- La descarga en segundo plano
+- Al cerrar la app instala la nueva versión sola
+- Botón "Instalar ahora" para no esperar al cierre
 
 ---
 
