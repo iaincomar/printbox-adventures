@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { findEvent, getPhotosToPrint, getConfig, saveConfig, getPrinters, getPrintCount } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Printer.css'
-const APP_VERSION = '1.0.3'
+const APP_VERSION = '1.0.5'
 
 const BACKEND = window.electronAPI?.backendUrl || 'http://localhost:4000'
 

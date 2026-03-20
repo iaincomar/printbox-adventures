@@ -1,9 +1,12 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron')
 const { autoUpdater } = require('electron-updater')
-autoUpdater.logger = require('electron-log')
-autoUpdater.logger.transports.file.level = 'info'
+const log = require('electron-log')
 const path = require('path')
 const os = require('os')
+
+autoUpdater.logger = log
+autoUpdater.logger.transports.file.level = 'info'
+log.info('App iniciando...')
 
 const isDev = !app.isPackaged
 
@@ -17,42 +20,52 @@ let splashWin  = null
 let tray       = null
 
 // ── AUTO-ACTUALIZACIÓN ────────────────────────────────────────────────────────
-if (!isDev) {
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+autoUpdater.autoDownload = true
+autoUpdater.autoInstallOnAppQuit = true
 
-  autoUpdater.on('update-available', () => {
-    if (printerWin) {
-      printerWin.webContents.executeJavaScript(`
+autoUpdater.on('checking-for-update', () => {
+  log.info('Comprobando actualizaciones...')
+})
+
+autoUpdater.on('update-available', (info) => {
+  log.info('Actualización disponible:', info.version)
+  if (printerWin) {
+    printerWin.webContents.executeJavaScript(`
+      const existing = document.getElementById('update-bar')
+      if (!existing) {
         const bar = document.createElement('div')
         bar.id = 'update-bar'
         bar.style = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#f7c604;color:#000;text-align:center;padding:8px;font-weight:bold;font-size:13px'
-        bar.innerHTML = '⬇️ Hay una actualización disponible. Se instalará automáticamente al cerrar la app.'
+        bar.innerHTML = '⬇️ Hay una actualización disponible. Descargando en segundo plano...'
         document.body.prepend(bar)
-      `)
-    }
-  })
+      }
+    `)
+  }
+})
 
-  autoUpdater.on('update-downloaded', () => {
-    if (printerWin) {
-      printerWin.webContents.executeJavaScript(`
-        const bar = document.getElementById('update-bar')
-        if (bar) bar.innerHTML = '✅ Actualización descargada. Se instalará al cerrar la app. <button onclick="window.__installNow()" style="margin-left:12px;padding:2px 10px;cursor:pointer;border:none;border-radius:4px;background:#000;color:#f7c604;font-weight:bold">Instalar ahora</button>'
-      `)
-      printerWin.webContents.executeJavaScript(`
-        window.__installNow = () => { require('electron').ipcRenderer.send('install-update') }
-      `).catch(() => {})
-    }
-  })
+autoUpdater.on('update-not-available', (info) => {
+  log.info('No hay actualización. Versión actual:', info.version)
+})
 
-  autoUpdater.on('error', (err) => {
-    console.error('[Updater] Error:', err.message)
-  })
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Actualización descargada:', info.version)
+  if (printerWin) {
+    printerWin.webContents.executeJavaScript(`
+      const bar = document.getElementById('update-bar')
+      if (bar) {
+        bar.innerHTML = '✅ Actualización descargada. Se instalará al cerrar la app. <button onclick="window.__installNow()" style="margin-left:12px;padding:2px 10px;cursor:pointer;border:none;border-radius:4px;background:#000;color:#f7c604;font-weight:bold">Instalar ahora</button>'
+      }
+    `)
+  }
+})
 
-  ipcMain.on('install-update', () => {
-    autoUpdater.quitAndInstall()
-  })
-}
+autoUpdater.on('error', (err) => {
+  log.error('Error en autoUpdater:', err.message)
+})
+
+ipcMain.on('install-update', () => {
+  autoUpdater.quitAndInstall()
+})
 
 // ── SPLASH SCREEN ─────────────────────────────────────────────────────────────
 function createSplash() {
@@ -109,7 +122,6 @@ function createSplash() {
 
 // ── CREAR VENTANAS PRINCIPALES ────────────────────────────────────────────────
 function createWindows() {
-  // Viewer en modo quiosco
   viewerWin = new BrowserWindow({
     title: 'PrintboxAdventures — Visor de Evento',
     backgroundColor: '#0a0a0f',
@@ -140,7 +152,18 @@ function createWindows() {
   viewerWin.loadURL(`${base}/#/viewer`)
   printerWin.loadURL(`${base}/#/printer`)
 
-  // Minimizar a bandeja en vez de cerrar
+  // Esperar a que la ventana cargue completamente antes de comprobar actualizaciones
+  printerWin.webContents.once('did-finish-load', () => {
+    log.info('Ventana cargada. Comprobando actualizaciones en 5s...')
+    if (!isDev) {
+      setTimeout(() => {
+        autoUpdater.checkForUpdatesAndNotify().catch(err => {
+          log.error('checkForUpdates error:', err.message)
+        })
+      }, 5000)
+    }
+  })
+
   printerWin.on('close', (e) => {
     if (!app.isQuitting) {
       e.preventDefault()
@@ -153,7 +176,6 @@ function createWindows() {
     }
   })
 
-  // Salir del quiosco con F11 o Escape
   viewerWin.webContents.on('before-input-event', (e, input) => {
     if (input.key === 'F11' || (input.key === 'Escape' && viewerWin.isKiosk())) {
       viewerWin.setKiosk(false)
@@ -164,11 +186,6 @@ function createWindows() {
   if (splashWin) {
     splashWin.close()
     splashWin = null
-  }
-
-  // Comprobar actualizaciones después de que las ventanas carguen
-  if (!isDev) {
-    setTimeout(() => autoUpdater.checkForUpdatesAndNotify(), 5000)
   }
 }
 
@@ -195,6 +212,7 @@ function createTray() {
 
 // ── ARRANQUE ──────────────────────────────────────────────────────────────────
 app.whenReady().then(() => {
+  log.info('App ready, isDev:', isDev)
   createTray()
 
   if (isDev) {
@@ -205,15 +223,12 @@ app.whenReady().then(() => {
   }
 })
 
-app.on('window-all-closed', () => {
-  // No salir — siguen en bandeja
-})
+app.on('window-all-closed', () => {})
 
 app.on('before-quit', () => {
   app.isQuitting = true
 })
 
-// Ctrl+Q para salir desde cualquier ventana
 app.on('web-contents-created', (_, wc) => {
   wc.on('before-input-event', (e, input) => {
     if (input.control && input.key === 'q') {
