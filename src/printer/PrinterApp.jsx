@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+
+const APP_VERSION = '1.0.0'
 import { findEvent, getPhotosToPrint, getConfig, saveConfig, getPrinters, getPrintCount } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Printer.css'
@@ -236,7 +238,10 @@ export default function PrinterApp() {
           <img src="/assets/MoscaPrintbox.png" alt="Logo" className="rounded-2" style={{ width: 38, height: 38 }} />
           <div>
             <div className="fw-bold" style={{ fontFamily: 'Syne', fontSize: 16 }}>PrintboxAdventures</div>
-            <div className="text-secondary font-mono" style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' }}>Panel de Control</div>
+            <div className="text-secondary font-mono d-flex align-items-center gap-2" style={{ fontSize: 10, letterSpacing: 1.5, textTransform: 'uppercase' }}>
+              Panel de Control
+              <span className="badge border border-secondary text-secondary fw-normal" style={{ fontSize: 9, letterSpacing: 0 }}>v{APP_VERSION}</span>
+            </div>
           </div>
         </div>
         <div className="d-flex align-items-center gap-3 ms-auto">
