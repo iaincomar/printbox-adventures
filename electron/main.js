@@ -1,9 +1,9 @@
 const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const path = require('path')
 const os = require('os')
 
 const isDev = !app.isPackaged
-
 
 if (!isDev) {
   require('../backend/server')
@@ -14,7 +14,45 @@ let viewerWin  = null
 let splashWin  = null
 let tray       = null
 
-// ── 5. SPLASH SCREEN ──────────────────────────────────────────────────────────
+// ── AUTO-ACTUALIZACIÓN ────────────────────────────────────────────────────────
+if (!isDev) {
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('update-available', () => {
+    if (printerWin) {
+      printerWin.webContents.executeJavaScript(`
+        const bar = document.createElement('div')
+        bar.id = 'update-bar'
+        bar.style = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#f7c604;color:#000;text-align:center;padding:8px;font-weight:bold;font-size:13px'
+        bar.innerHTML = '⬇️ Hay una actualización disponible. Se instalará automáticamente al cerrar la app.'
+        document.body.prepend(bar)
+      `)
+    }
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    if (printerWin) {
+      printerWin.webContents.executeJavaScript(`
+        const bar = document.getElementById('update-bar')
+        if (bar) bar.innerHTML = '✅ Actualización descargada. Se instalará al cerrar la app. <button onclick="window.__installNow()" style="margin-left:12px;padding:2px 10px;cursor:pointer;border:none;border-radius:4px;background:#000;color:#f7c604;font-weight:bold">Instalar ahora</button>'
+      `)
+      printerWin.webContents.executeJavaScript(`
+        window.__installNow = () => { require('electron').ipcRenderer.send('install-update') }
+      `).catch(() => {})
+    }
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('[Updater] Error:', err.message)
+  })
+
+  ipcMain.on('install-update', () => {
+    autoUpdater.quitAndInstall()
+  })
+}
+
+// ── SPLASH SCREEN ─────────────────────────────────────────────────────────────
 function createSplash() {
   splashWin = new BrowserWindow({
     width: 420,
@@ -52,7 +90,7 @@ function createSplash() {
   h1 { color:#f7c604; font-size:22px; font-weight:700; letter-spacing:1px; }
   p  { color:#888; font-size:13px; }
   .bar-wrap { width:240px; height:4px; background:#222; border-radius:4px; overflow:hidden; }
-  .bar { height:4px; background:#f7c604; border-radius:4px; animation: load 2s ease-in-out forwards; }
+  .bar { height:4px; background:#f7c604; border-radius:4px; animation: load 2.5s ease-in-out forwards; }
   @keyframes load { from{width:0%} to{width:100%} }
 </style>
 </head>
@@ -69,12 +107,12 @@ function createSplash() {
 
 // ── CREAR VENTANAS PRINCIPALES ────────────────────────────────────────────────
 function createWindows() {
-  // ── 1. MODO QUIOSCO (Viewer) ──────────────────────────────────────────────
+  // Viewer en modo quiosco
   viewerWin = new BrowserWindow({
     title: 'PrintboxAdventures — Visor de Evento',
     backgroundColor: '#0a0a0f',
     fullscreen: true,
-    kiosk: true,          // pantalla completa sin menú ni barra
+    kiosk: true,
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,
@@ -100,12 +138,12 @@ function createWindows() {
   viewerWin.loadURL(`${base}/#/viewer`)
   printerWin.loadURL(`${base}/#/printer`)
 
-  // ── 6. MINIMIZAR A BANDEJA (solo Printer, el Viewer es quiosco) ───────────
+  // Minimizar a bandeja en vez de cerrar
   printerWin.on('close', (e) => {
     if (!app.isQuitting) {
       e.preventDefault()
       printerWin.hide()
-      if (tray) tray.displayBalloon?.({
+      tray?.displayBalloon?.({
         title: 'PrintboxAdventures',
         content: 'La app sigue corriendo en la bandeja del sistema.',
         iconType: 'info',
@@ -113,7 +151,7 @@ function createWindows() {
     }
   })
 
-  // Salir quiosco con F11 o Escape (para el operador)
+  // Salir del quiosco con F11 o Escape
   viewerWin.webContents.on('before-input-event', (e, input) => {
     if (input.key === 'F11' || (input.key === 'Escape' && viewerWin.isKiosk())) {
       viewerWin.setKiosk(false)
@@ -124,6 +162,11 @@ function createWindows() {
   if (splashWin) {
     splashWin.close()
     splashWin = null
+  }
+
+  // Comprobar actualizaciones después de que las ventanas carguen
+  if (!isDev) {
+    setTimeout(() => autoUpdater.checkForUpdatesAndNotify(), 5000)
   }
 }
 
@@ -138,19 +181,10 @@ function createTray() {
   tray.setToolTip('PrintboxAdventures')
 
   const menu = Menu.buildFromTemplate([
-    {
-      label: 'Mostrar Panel de Control',
-      click: () => { printerWin?.show(); printerWin?.focus() },
-    },
-    {
-      label: 'Mostrar Visor',
-      click: () => { viewerWin?.show(); viewerWin?.focus() },
-    },
+    { label: 'Mostrar Panel de Control', click: () => { printerWin?.show(); printerWin?.focus() } },
+    { label: 'Mostrar Visor', click: () => { viewerWin?.show(); viewerWin?.focus() } },
     { type: 'separator' },
-    {
-      label: 'Salir',
-      click: () => { app.isQuitting = true; app.quit() },
-    },
+    { label: 'Salir', click: () => { app.isQuitting = true; app.quit() } },
   ])
 
   tray.setContextMenu(menu)
@@ -165,20 +199,19 @@ app.whenReady().then(() => {
     createWindows()
   } else {
     createSplash()
-    // Esperar 2.5s a que Express arranque
     setTimeout(createWindows, 2500)
   }
 })
 
 app.on('window-all-closed', () => {
-  // No salir aunque se cierren las ventanas (siguen en bandeja)
+  // No salir — siguen en bandeja
 })
 
 app.on('before-quit', () => {
   app.isQuitting = true
 })
 
-// Permitir salir con Ctrl+Q desde cualquier ventana (atajo del operador)
+// Ctrl+Q para salir desde cualquier ventana
 app.on('web-contents-created', (_, wc) => {
   wc.on('before-input-event', (e, input) => {
     if (input.control && input.key === 'q') {
