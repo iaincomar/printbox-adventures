@@ -1,8 +1,7 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const log = require('electron-log')
 const path = require('path')
-const os = require('os')
 
 autoUpdater.logger = log
 autoUpdater.logger.transports.file.level = 'info'
@@ -23,23 +22,44 @@ let tray       = null
 autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = true
 
+function showUpdateBar(html) {
+  if (!printerWin) return
+  printerWin.webContents.executeJavaScript(`
+    let bar = document.getElementById('update-bar')
+    if (!bar) {
+      bar = document.createElement('div')
+      bar.id = 'update-bar'
+      bar.style = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#f7c604;color:#000;text-align:center;padding:8px 16px;font-weight:bold;font-size:13px;display:flex;align-items:center;justify-content:center;gap:12px;'
+      document.body.prepend(bar)
+    }
+    bar.innerHTML = ${JSON.stringify(html)}
+  `).catch(() => {})
+}
+
 autoUpdater.on('checking-for-update', () => {
   log.info('Comprobando actualizaciones...')
 })
 
 autoUpdater.on('update-available', (info) => {
   log.info('Actualización disponible:', info.version)
+  showUpdateBar(`⬇️ Nueva versión <strong>v${info.version}</strong> disponible. Descargando...`)
+})
+
+autoUpdater.on('download-progress', (progress) => {
+  const pct = Math.round(progress.percent)
+  showUpdateBar(`⬇️ Descargando actualización... <strong>${pct}%</strong>`)
+})
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Actualización descargada:', info.version)
+  showUpdateBar(`✅ Actualización <strong>v${info.version}</strong> lista. <button id="install-now-btn" style="margin-left:8px;padding:3px 12px;cursor:pointer;border:none;border-radius:4px;background:#000;color:#f7c604;font-weight:bold;font-size:12px">Instalar ahora</button> <span style="font-weight:normal;font-size:11px;opacity:0.7">(o se instalará automáticamente al salir)</span>`)
+
   if (printerWin) {
     printerWin.webContents.executeJavaScript(`
-      const existing = document.getElementById('update-bar')
-      if (!existing) {
-        const bar = document.createElement('div')
-        bar.id = 'update-bar'
-        bar.style = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#f7c604;color:#000;text-align:center;padding:8px;font-weight:bold;font-size:13px'
-        bar.innerHTML = '⬇️ Hay una actualización disponible. Descargando en segundo plano...'
-        document.body.prepend(bar)
-      }
-    `)
+      document.getElementById('install-now-btn')?.addEventListener('click', () => {
+        window.__electronInstallUpdate()
+      })
+    `).catch(() => {})
   }
 })
 
@@ -47,24 +67,14 @@ autoUpdater.on('update-not-available', (info) => {
   log.info('No hay actualización. Versión actual:', info.version)
 })
 
-autoUpdater.on('update-downloaded', (info) => {
-  log.info('Actualización descargada:', info.version)
-  if (printerWin) {
-    printerWin.webContents.executeJavaScript(`
-      const bar = document.getElementById('update-bar')
-      if (bar) {
-        bar.innerHTML = '✅ Actualización descargada. Se instalará al cerrar la app. <button onclick="window.__installNow()" style="margin-left:12px;padding:2px 10px;cursor:pointer;border:none;border-radius:4px;background:#000;color:#f7c604;font-weight:bold">Instalar ahora</button>'
-      }
-    `)
-  }
-})
-
 autoUpdater.on('error', (err) => {
   log.error('Error en autoUpdater:', err.message)
 })
 
-ipcMain.on('install-update', () => {
-  autoUpdater.quitAndInstall()
+// IPC para instalar desde el renderer
+ipcMain.handle('install-update', () => {
+  app.isQuitting = true
+  autoUpdater.quitAndInstall(false, true)
 })
 
 // ── SPLASH SCREEN ─────────────────────────────────────────────────────────────
@@ -86,41 +96,27 @@ function createSplash() {
     : path.join(process.resourcesPath, 'assets/MoscaPrintbox.png')
 
   const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<style>
+<html><head><meta charset="utf-8"><style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    width:420px; height:280px;
-    background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
-    border-radius: 16px;
-    border: 1px solid rgba(247,198,4,0.3);
-    display:flex; flex-direction:column;
-    align-items:center; justify-content:center; gap:20px;
-    font-family: system-ui, sans-serif;
-    overflow:hidden;
-  }
+  body { width:420px; height:280px; background:linear-gradient(135deg,#0a0a0f,#1a1a2e); border-radius:16px; border:1px solid rgba(247,198,4,0.3); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:20px; font-family:system-ui,sans-serif; overflow:hidden; }
   img { width:80px; height:80px; object-fit:contain; border-radius:12px; }
   h1 { color:#f7c604; font-size:22px; font-weight:700; letter-spacing:1px; }
-  p  { color:#888; font-size:13px; }
+  p { color:#888; font-size:13px; }
   .bar-wrap { width:240px; height:4px; background:#222; border-radius:4px; overflow:hidden; }
-  .bar { height:4px; background:#f7c604; border-radius:4px; animation: load 2.5s ease-in-out forwards; }
+  .bar { height:4px; background:#f7c604; border-radius:4px; animation:load 2.5s ease-in-out forwards; }
   @keyframes load { from{width:0%} to{width:100%} }
-</style>
-</head>
+</style></head>
 <body>
   <img src="file://${logoPath.replace(/\\/g,'/')}" alt="logo" onerror="this.style.display='none'">
   <h1>PrintboxAdventures</h1>
   <p>Iniciando sistema...</p>
   <div class="bar-wrap"><div class="bar"></div></div>
-</body>
-</html>`
+</body></html>`
 
   splashWin.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
 }
 
-// ── CREAR VENTANAS PRINCIPALES ────────────────────────────────────────────────
+// ── CREAR VENTANAS ────────────────────────────────────────────────────────────
 function createWindows() {
   viewerWin = new BrowserWindow({
     title: 'PrintboxAdventures — Visor de Evento',
@@ -152,9 +148,16 @@ function createWindows() {
   viewerWin.loadURL(`${base}/#/viewer`)
   printerWin.loadURL(`${base}/#/printer`)
 
-  // Esperar a que la ventana cargue completamente antes de comprobar actualizaciones
+  // Exponer función de instalación al renderer via preload
   printerWin.webContents.once('did-finish-load', () => {
     log.info('Ventana cargada. Comprobando actualizaciones en 5s...')
+    // Inyectar función global para instalar
+    printerWin.webContents.executeJavaScript(`
+      window.__electronInstallUpdate = () => {
+        window.electronAPI?.installUpdate()
+      }
+    `).catch(() => {})
+
     if (!isDev) {
       setTimeout(() => {
         autoUpdater.checkForUpdatesAndNotify().catch(err => {
@@ -189,7 +192,7 @@ function createWindows() {
   }
 }
 
-// ── BANDEJA DEL SISTEMA ───────────────────────────────────────────────────────
+// ── BANDEJA ───────────────────────────────────────────────────────────────────
 function createTray() {
   const iconPath = isDev
     ? path.join(__dirname, '../src/public/assets/MoscaPrintbox.png')
@@ -214,7 +217,6 @@ function createTray() {
 app.whenReady().then(() => {
   log.info('App ready, isDev:', isDev)
   createTray()
-
   if (isDev) {
     createWindows()
   } else {
@@ -224,10 +226,7 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {})
-
-app.on('before-quit', () => {
-  app.isQuitting = true
-})
+app.on('before-quit', () => { app.isQuitting = true })
 
 app.on('web-contents-created', (_, wc) => {
   wc.on('before-input-event', (e, input) => {
