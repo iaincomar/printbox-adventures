@@ -1,3 +1,8 @@
+/* ============================================
+   MobileApp.css
+   Estilos para la aplicación móvil (cliente)
+   ============================================ */
+
 .mobile-app {
   min-height: 100dvh;
   background: #0a0a0f;
@@ -14,7 +19,7 @@ body {
   background: #0a0a0f;
 }
 
-/* Header */
+/* ========== HEADER ========== */
 .mobile-header {
   background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 100%);
   border-bottom: 2px solid #f7c604;
@@ -24,7 +29,95 @@ body {
   z-index: 100;
 }
 
-/* Foto card galería */
+.mobile-header-logo {
+  width: 32px;
+  border-radius: 6px;
+}
+
+.mobile-header-title {
+  font-size: 14px;
+  font-weight: bold;
+  color: #f7c604;
+}
+
+.mobile-header-subtitle {
+  font-size: 11px;
+  color: var(--bs-secondary);
+}
+
+.mobile-header-edit {
+  font-size: 11px;
+}
+
+/* ========== PANTALLA DE EVENTO ========== */
+.event-container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+}
+
+.event-logo {
+  width: 80px;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.event-title {
+  font-size: 22px;
+  font-weight: bold;
+  color: #f7c604;
+  margin-bottom: 0.25rem;
+}
+
+.event-subtitle {
+  font-size: 14px;
+  color: var(--bs-secondary);
+  margin-bottom: 1.5rem;
+}
+
+.event-input-wrapper {
+  width: 100%;
+  max-width: 320px;
+}
+
+.event-input-group {
+  margin-bottom: 0.5rem;
+}
+
+.event-input-prefix {
+  background-color: #000;
+  border-color: var(--bs-secondary);
+  color: #f7c604;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.event-input {
+  background-color: #000;
+  border-color: var(--bs-secondary);
+  color: var(--bs-light);
+  text-align: center;
+  font-weight: bold;
+  font-size: 24px;
+  letter-spacing: 4px;
+  font-family: monospace;
+}
+
+.event-input.is-invalid {
+  border-color: var(--bs-danger);
+}
+
+.event-button {
+  font-size: 16px;
+  font-weight: bold;
+  width: 100%;
+}
+
+/* ========== GALERÍA ========== */
+/* Foto card */
 .mobile-photo-card {
   position: relative;
   border-radius: 10px;
@@ -64,7 +157,61 @@ body {
   font-size: 13px;
 }
 
-/* Cámara */
+/* Grid galería */
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 0 1rem;
+  padding-bottom: 120px;
+}
+
+/* Loader */
+.gallery-loader {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+/* Scroll infinito */
+.infinite-loader {
+  text-align: center;
+  padding: 0.75rem 0;
+}
+
+.all-loaded-text {
+  font-size: 12px;
+  color: var(--bs-secondary);
+}
+
+/* Botón cámara en galería */
+.camera-button {
+  margin-bottom: 0.75rem;
+  padding: 0 1rem;
+}
+
+.camera-button .btn {
+  width: 100%;
+  font-weight: 600;
+}
+
+/* ========== BARRA FLOTANTE DE PEDIDO ========== */
+.order-float-button {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  width: 90%;
+  max-width: 420px;
+}
+
+.order-float-button .btn {
+  font-size: 16px;
+  border-radius: 30px;
+  padding: 14px 24px;
+}
+
+/* ========== CÁMARA ========== */
 .camera-preview {
   width: 100%;
   aspect-ratio: 3/4;
@@ -90,7 +237,85 @@ body {
   background: #f7c604;
 }
 
-/* Resumen pedido */
+.camera-container {
+  padding: 0 1rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.camera-shutter {
+  display: flex;
+  justify-content: center;
+}
+
+/* Miniaturas de fotos capturadas */
+.captured-section {
+  margin-top: 0.5rem;
+}
+
+.captured-title {
+  font-size: 12px;
+  color: var(--bs-secondary);
+  margin-bottom: 0.5rem;
+}
+
+.captured-thumbnails {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.captured-thumb-wrapper {
+  position: relative;
+}
+
+.captured-thumb {
+  width: 60px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 2px solid #f7c604;
+}
+
+.captured-remove-btn {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  border-radius: 50%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.continue-button {
+  margin-top: 0.5rem;
+}
+
+/* ========== RESUMEN DEL PEDIDO ========== */
+.order-summary-container {
+  padding: 1rem;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+/* Item de foto en resumen */
+.order-photo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: #000;
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+
 .order-photo-thumb {
   width: 60px;
   height: 80px;
@@ -99,7 +324,142 @@ body {
   border: 1px solid #333;
 }
 
-/* Steps indicator */
+.order-photo-info {
+  flex-grow: 1;
+}
+
+.order-photo-label {
+  font-size: 12px;
+  color: var(--bs-secondary);
+}
+
+.order-copies-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.order-copies-label {
+  font-size: 12px;
+  color: var(--bs-secondary);
+}
+
+.order-copies-btn {
+  padding: 0 0.5rem;
+  font-size: 0.875rem;
+}
+
+.order-copies-btn-active {
+  background-color: #f7c604;
+  color: #000;
+  font-weight: bold;
+}
+
+.order-copies-btn-inactive {
+  background-color: transparent;
+  border-color: var(--bs-secondary);
+  color: var(--bs-light);
+}
+
+.order-price {
+  margin-left: auto;
+  color: #f7c604;
+  font-weight: bold;
+}
+
+.order-delete-btn {
+  flex-shrink: 0;
+}
+
+/* Total del pedido */
+.order-total-box {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #000;
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.order-total-label {
+  font-weight: bold;
+}
+
+.order-total-amount {
+  font-weight: bold;
+  color: #f7c604;
+  font-size: 22px;
+}
+
+/* Nota de pago */
+.order-payment-note {
+  background: #1a1a2e;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 13px;
+  border: none;
+}
+
+/* Footer del pedido */
+.order-footer {
+  padding: 0 1rem 1rem 1rem;
+  border-top: 1px solid #222;
+  padding-top: 0.5rem;
+}
+
+.order-confirm-btn {
+  font-size: 16px;
+  font-weight: bold;
+  width: 100%;
+}
+
+/* ========== PANTALLA DE ÉXITO ========== */
+.success-container {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  text-align: center;
+}
+
+.success-icon {
+  font-size: 72px;
+}
+
+.success-title {
+  font-weight: bold;
+  margin-top: 0.75rem;
+  color: #f7c604;
+}
+
+.success-text {
+  color: var(--bs-secondary);
+  margin-top: 0.5rem;
+}
+
+.success-small-text {
+  font-size: 13px;
+  color: var(--bs-secondary);
+}
+
+.back-button {
+  margin-top: 1.5rem;
+}
+
+.company-footer {
+  margin-top: 3rem;
+  font-size: 12px;
+  color: var(--bs-secondary);
+}
+
+/* ========== STEP INDICATOR ========== */
 .step-dot {
   width: 8px;
   height: 8px;
@@ -116,7 +476,7 @@ body {
   background: #198754;
 }
 
-/* Toast */
+/* ========== TOAST NOTIFICATIONS ========== */
 .mobile-toast {
   position: fixed;
   bottom: 24px;
@@ -138,14 +498,13 @@ body {
     opacity: 0;
     transform: translateX(-50%) translateY(10px);
   }
-
   to {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
   }
 }
 
-/* Fix altura mínima para que el contenido no quede cortado por el footer */
+/* ========== UTILIDADES ========== */
 .mobile-gallery-grid {
   padding-bottom: 120px;
 }
