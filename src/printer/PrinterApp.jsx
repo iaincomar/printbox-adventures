@@ -25,9 +25,9 @@ export default function PrinterApp() {
   const [logs, setLogs] = useState([])
   const [elapsed, setElapsed] = useState(0)
   const [printerStatus, setPrinterStatus] = useState('ok')   // 'ok' | 'offline'
-  const [apiStatus, setApiStatus]         = useState('ok')   // 'ok' | 'error'
-  const [reconnecting, setReconnecting]   = useState(false)
-  const reconnectAttemptsRef              = useRef(0)
+  const [apiStatus, setApiStatus] = useState('ok')   // 'ok' | 'error'
+  const [reconnecting, setReconnecting] = useState(false)
+  const reconnectAttemptsRef = useRef(0)
   const logsRef = useRef(null)
 
   // ── CHECK IMPRESORA ─────────────────────────────────────────────────────────
@@ -45,8 +45,8 @@ export default function PrinterApp() {
     getConfig().then(d => {
       if (d.config) { setConfig(d.config); checkPrinterStatus(d.config.impresora) }
       if (d.textos) setTextos(d.textos)
-    }).catch(() => {})
-    getPrintCount().then(setPrintCount).catch(() => {})
+    }).catch(() => { })
+    getPrintCount().then(setPrintCount).catch(() => { })
   }, [])
 
   // Verificar impresora cada 30s
@@ -63,7 +63,7 @@ export default function PrinterApp() {
   useInterval(() => setElapsed(e => e + 1), running ? 1000 : null)
 
   function formatElapsed(s) {
-    return [Math.floor(s/3600), Math.floor((s%3600)/60), s%60].map(n => String(n).padStart(2,'0')).join(':')
+    return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map(n => String(n).padStart(2, '0')).join(':')
   }
 
   function handleStartClick() {
@@ -305,8 +305,8 @@ export default function PrinterApp() {
                   <div className="mt-4">
                     <p className="text-secondary font-mono fw-bold mb-3" style={{ fontSize: 11, letterSpacing: 2, textTransform: 'uppercase' }}>Textos del Visor</p>
                     <div className="row g-2">
-                      {[['text_es','Español'],['text_en','English'],['text_fr','Français'],['text_de','Deutsch'],
-                        ['precio1','1 foto (€)'],['precio2','2 fotos (€)'],['precio3','3 fotos (€)'],['empresa','Empresa']
+                      {[['text_es', 'Español'], ['text_en', 'English'], ['text_fr', 'Français'], ['text_de', 'Deutsch'],
+                      ['precio1', '1 foto (€)'], ['precio2', '2 fotos (€)'], ['precio3', '3 fotos (€)'], ['empresa', 'Empresa']
                       ].map(([key, label]) => (
                         <div className="col-md-3" key={key}>
                           <label className="form-label text-secondary small fw-bold">{label}</label>

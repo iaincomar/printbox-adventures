@@ -1,25 +1,41 @@
-.font-mono { font-family: 'DM Mono', monospace; }
+.font-mono {
+  font-family: 'DM Mono', monospace;
+}
 
 .printer-state-dot {
-  width: 48px; height: 48px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   transition: background 0.3s, box-shadow 0.3s;
 }
+
 .printer-state-dot.on {
   background: #22c55e;
-  box-shadow: 0 0 20px rgba(34,197,94,0.5), 0 0 40px rgba(34,197,94,0.2);
+  box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.2);
   animation: pulse-green 2s ease-in-out infinite;
 }
+
 .printer-state-dot.off {
   background: #1a1a26;
   border: 2px solid #2a2a3d;
 }
 
-.bg-darker { background: #0a0a0f !important; }
+.bg-darker {
+  background: #0a0a0f !important;
+}
 
-.printer-log > div { line-height: 1.6; }
+.printer-log>div {
+  line-height: 1.6;
+}
 
 @keyframes pulse-green {
-  0%, 100% { box-shadow: 0 0 20px rgba(34,197,94,0.5), 0 0 40px rgba(34,197,94,0.2); }
-  50%       { box-shadow: 0 0 30px rgba(34,197,94,0.8), 0 0 60px rgba(34,197,94,0.35); }
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(34, 197, 94, 0.5), 0 0 40px rgba(34, 197, 94, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 30px rgba(34, 197, 94, 0.8), 0 0 60px rgba(34, 197, 94, 0.35);
+  }
 }

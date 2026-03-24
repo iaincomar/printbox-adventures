@@ -5,15 +5,34 @@
   --bs-body-color: #e8e8f0;
 }
 
-body { font-family: 'Syne', sans-serif; }
-.font-mono { font-family: 'DM Mono', monospace !important; }
+body {
+  font-family: 'Syne', sans-serif;
+}
+
+.font-mono {
+  font-family: 'DM Mono', monospace !important;
+}
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #0a0a0f; }
-::-webkit-scrollbar-thumb { background: #2a2a3d; border-radius: 3px; }
+::-webkit-scrollbar {
+  width: 6px;
+}
 
-html, body, #root { height: 100%; overflow: hidden; }
+::-webkit-scrollbar-track {
+  background: #0a0a0f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #2a2a3d;
+  border-radius: 3px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+}
 
 /* La app móvil necesita scroll natural */
 body:has(.mobile-app),

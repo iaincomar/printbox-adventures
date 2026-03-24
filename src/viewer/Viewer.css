@@ -1,4 +1,6 @@
-.font-mono { font-family: 'DM Mono', monospace !important; }
+.font-mono {
+  font-family: 'DM Mono', monospace !important;
+}
 
 .viewer-header-img {
   height: 90px;
@@ -14,12 +16,20 @@
 .viewer-photo-card {
   transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
 }
-.viewer-photo-card .viewer-photo-hint { opacity: 0; transition: opacity 0.2s; }
-.viewer-photo-card:hover .viewer-photo-hint { opacity: 1; }
+
+.viewer-photo-card .viewer-photo-hint {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.viewer-photo-card:hover .viewer-photo-hint {
+  opacity: 1;
+}
+
 .viewer-photo-card:hover {
   border-color: #f7c604 !important;
   transform: translateY(-3px);
-  box-shadow: 0 6px 24px rgba(247,198,4,0.2);
+  box-shadow: 0 6px 24px rgba(247, 198, 4, 0.2);
 }
 
 /* Paginador */
@@ -30,14 +40,27 @@
 }
 
 @media (max-width: 576px) {
-  .viewer-header-img { height: 70px; }
-  .viewer-footer-img { height: 44px; }
+  .viewer-header-img {
+    height: 70px;
+  }
+
+  .viewer-footer-img {
+    height: 44px;
+  }
 }
 
 /* Header y footer altura fija */
-.viewer-app > header { flex-shrink: 0 !important; }
-.viewer-app > footer { flex-shrink: 0 !important; }
-.viewer-app > footer .d-flex { min-height: 48px; }
+.viewer-app>header {
+  flex-shrink: 0 !important;
+}
+
+.viewer-app>footer {
+  flex-shrink: 0 !important;
+}
+
+.viewer-app>footer .d-flex {
+  min-height: 48px;
+}
 
 @media (max-width: 576px) {
   .viewer-header-img {
@@ -48,7 +71,7 @@
 }
 
 /* Forzar altura fija del header sin importar nada */
-.viewer-app > header {
+.viewer-app>header {
   height: 90px !important;
   min-height: 90px !important;
   max-height: 90px !important;

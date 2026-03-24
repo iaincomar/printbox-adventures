@@ -6,14 +6,14 @@ import './Viewer.css'
 const BACKEND = window.electronAPI?.backendUrl || 'http://localhost:4000'
 
 export default function ViewerApp() {
-  const [config, setConfig]       = useState(null)
-  const [textos, setTextos]       = useState(null)
-  const [uuid, setUuid]           = useState(null)
-  const [photos, setPhotos]       = useState([])
+  const [config, setConfig] = useState(null)
+  const [textos, setTextos] = useState(null)
+  const [uuid, setUuid] = useState(null)
+  const [photos, setPhotos] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
-  const [lastPage, setLastPage]   = useState(1)
+  const [lastPage, setLastPage] = useState(1)
   const [printCount, setPrintCount] = useState(0)
-  const [error, setError]         = useState(null)
+  const [error, setError] = useState(null)
 
   // Modal: introducir evento
   const [showEventModal, setShowEventModal] = useState(false)
@@ -23,8 +23,8 @@ export default function ViewerApp() {
 
   // Modal: selección de copias + imprimir
   const [selectedPhoto, setSelectedPhoto] = useState(null) // foto seleccionada
-  const [copies, setCopies]       = useState(1)
-  const [printing, setPrinting]   = useState(false)
+  const [copies, setCopies] = useState(1)
+  const [printing, setPrinting] = useState(false)
   const [printDone, setPrintDone] = useState(false)
 
   // ── Carga inicial ─────────────────────────────────────────────────────────
@@ -51,7 +51,7 @@ export default function ViewerApp() {
     setShowEventModal(false)
     const newConfig = { ...config, evento: fullCode }
     setConfig(newConfig)
-    await saveConfig(newConfig, textos).catch(() => {})
+    await saveConfig(newConfig, textos).catch(() => { })
   }
 
   // ── Conectar al evento ────────────────────────────────────────────────────
@@ -89,7 +89,7 @@ export default function ViewerApp() {
       for (let i = 0; i < copies; i++) {
         await printJob({
           imageUrl,
-          imageName: `copy_${i+1}_${imageName}`,
+          imageName: `copy_${i + 1}_${imageName}`,
           printer: config?.impresora,
           delay: config?.delay || 5,
         })

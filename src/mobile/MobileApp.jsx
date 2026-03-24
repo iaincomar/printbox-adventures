@@ -10,7 +10,7 @@ function resizeImageBase64(dataUrl, maxSize = 1200) {
     img.onload = () => {
       const canvas = document.createElement('canvas')
       const ratio = Math.min(maxSize / img.width, maxSize / img.height, 1)
-      canvas.width  = img.width  * ratio
+      canvas.width = img.width * ratio
       canvas.height = img.height * ratio
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
       resolve(canvas.toDataURL('image/jpeg', 0.85))
@@ -20,58 +20,58 @@ function resizeImageBase64(dataUrl, maxSize = 1200) {
 }
 
 // ── PASOS ─────────────────────────────────────────────────────────────────────
-const STEP_EVENT    = 'event'
-const STEP_GALLERY  = 'gallery'
-const STEP_CAMERA   = 'camera'
-const STEP_ORDER    = 'order'
-const STEP_SUCCESS  = 'success'
+const STEP_EVENT = 'event'
+const STEP_GALLERY = 'gallery'
+const STEP_CAMERA = 'camera'
+const STEP_ORDER = 'order'
+const STEP_SUCCESS = 'success'
 
 // ── COMPONENTE PRINCIPAL ──────────────────────────────────────────────────────
 export default function MobileApp() {
-  const [step, setStep]           = useState(STEP_EVENT)
+  const [step, setStep] = useState(STEP_EVENT)
   const [eventCode, setEventCode] = useState('')
   const [eventError, setEventError] = useState('')
-  const [uuid, setUuid]           = useState(null)
-  const [textos, setTextos]       = useState({})
-  const [loading, setLoading]     = useState(false)
+  const [uuid, setUuid] = useState(null)
+  const [textos, setTextos] = useState({})
+  const [loading, setLoading] = useState(false)
 
   // Galería
-  const [photos, setPhotos]         = useState([])
-  const [page, setPage]             = useState(1)
-  const [lastPage, setLastPage]     = useState(1)
+  const [photos, setPhotos] = useState([])
+  const [page, setPage] = useState(1)
+  const [lastPage, setLastPage] = useState(1)
   const [loadingPhotos, setLoadingPhotos] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
   const loaderRef = useRef(null)
-  const uuidRef    = useRef(null)
+  const uuidRef = useRef(null)
 
   // Selección
-  const [selected, setSelected]   = useState([]) // [{uri, uri_full, copies}]
+  const [selected, setSelected] = useState([]) // [{uri, uri_full, copies}]
 
   // Cámara
-  const videoRef    = useRef(null)
-  const canvasRef   = useRef(null)
-  const streamRef   = useRef(null)
-  const [cameraOn, setCameraOn]   = useState(false)
+  const videoRef = useRef(null)
+  const canvasRef = useRef(null)
+  const streamRef = useRef(null)
+  const [cameraOn, setCameraOn] = useState(false)
   const [facingMode, setFacingMode] = useState('environment')
   const [capturedPhotos, setCapturedPhotos] = useState([]) // fotos tomadas con cámara
 
   // Envío
-  const [sending, setSending]     = useState(false)
-  const [toast, setToast]         = useState(null)
+  const [sending, setSending] = useState(false)
+  const [toast, setToast] = useState(null)
 
   // Forzar scroll en body cuando se monta la app móvil
   useEffect(() => {
     document.documentElement.style.overflow = 'auto'
-    document.documentElement.style.height   = 'auto'
+    document.documentElement.style.height = 'auto'
     document.body.style.overflow = 'auto'
-    document.body.style.height   = 'auto'
+    document.body.style.height = 'auto'
     const root = document.getElementById('root')
     if (root) { root.style.overflow = 'auto'; root.style.height = 'auto' }
     return () => {
       document.documentElement.style.overflow = ''
-      document.documentElement.style.height   = ''
+      document.documentElement.style.height = ''
       document.body.style.overflow = ''
-      document.body.style.height   = ''
+      document.body.style.height = ''
       if (root) { root.style.overflow = ''; root.style.height = '' }
     }
   }, [])
@@ -83,7 +83,7 @@ export default function MobileApp() {
     if (ev) {
       setEventCode(ev.replace('ev-', ''))
     }
-    getConfig().then(d => { if (d.textos) setTextos(d.textos) }).catch(() => {})
+    getConfig().then(d => { if (d.textos) setTextos(d.textos) }).catch(() => { })
   }, [])
 
   // ── TOAST ──────────────────────────────────────────────────────────────────
@@ -131,10 +131,10 @@ export default function MobileApp() {
     finally { setLoadingPhotos(false) }
   }
 
-  async function loadMore() {}  // ya no se usa, se carga todo de golpe
+  async function loadMore() { }  // ya no se usa, se carga todo de golpe
 
   // Observer ya no necesario pero se mantiene por si acaso
-  useEffect(() => {}, [page, lastPage, loadingMore, uuid])
+  useEffect(() => { }, [page, lastPage, loadingMore, uuid])
 
   function toggleSelect(photo) {
     setSelected(prev => {
@@ -172,10 +172,10 @@ export default function MobileApp() {
   }
 
   async function capturePhoto() {
-    const video  = videoRef.current
+    const video = videoRef.current
     const canvas = canvasRef.current
     if (!video || !canvas) return
-    canvas.width  = video.videoWidth
+    canvas.width = video.videoWidth
     canvas.height = video.videoHeight
     canvas.getContext('2d').drawImage(video, 0, 0)
     const raw = canvas.toDataURL('image/jpeg', 0.92)
@@ -270,7 +270,7 @@ export default function MobileApp() {
       {[STEP_GALLERY, STEP_CAMERA, STEP_ORDER].map(s => (
         <div key={s} className={`step-dot ${step === s ? 'active' : (
           [STEP_ORDER, STEP_SUCCESS].includes(step) && s !== STEP_ORDER ? 'done' :
-          step === STEP_ORDER && s === STEP_CAMERA ? 'done' : ''
+            step === STEP_ORDER && s === STEP_CAMERA ? 'done' : ''
         )}`} />
       ))}
     </div>

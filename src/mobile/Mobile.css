@@ -8,7 +8,8 @@
   overflow-x: hidden;
 }
 
-html, body {
+html,
+body {
   overflow-x: hidden;
   background: #0a0a0f;
 }
@@ -34,16 +35,19 @@ html, body {
   aspect-ratio: 3/4;
   background: #1a1a2e;
 }
+
 .mobile-photo-card img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
 }
+
 .mobile-photo-card.selected {
   border-color: #f7c604;
   transform: scale(0.97);
 }
+
 .mobile-photo-card .selected-badge {
   position: absolute;
   top: 6px;
@@ -80,6 +84,7 @@ html, body {
   cursor: pointer;
   transition: transform 0.1s, background 0.1s;
 }
+
 .shutter-btn:active {
   transform: scale(0.9);
   background: #f7c604;
@@ -102,8 +107,14 @@ html, body {
   background: #333;
   transition: background 0.2s;
 }
-.step-dot.active { background: #f7c604; }
-.step-dot.done   { background: #198754; }
+
+.step-dot.active {
+  background: #f7c604;
+}
+
+.step-dot.done {
+  background: #198754;
+}
 
 /* Toast */
 .mobile-toast {
@@ -121,9 +132,17 @@ html, body {
   white-space: nowrap;
   animation: fadeInUp 0.3s ease;
 }
+
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 /* Fix altura mínima para que el contenido no quede cortado por el footer */
