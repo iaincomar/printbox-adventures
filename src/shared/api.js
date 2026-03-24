@@ -4,7 +4,7 @@
 const BACKEND_URL =
   typeof window !== 'undefined' && window.electronAPI?.backendUrl
     ? window.electronAPI.backendUrl
-    : 'http://192.168.100.148:4000'
+    : 'http://192.168.100.152:4000'
 
 // ─── API Printbox (proxiada por el backend) ──────────────────────────────────
 
