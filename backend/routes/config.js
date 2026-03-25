@@ -16,7 +16,7 @@ router.get('/', (req, res) => {
     const apiFile = path.join(CONFIG_DIR, 'servidor_api.txt')
     const textosFile = path.join(CONFIG_DIR, 'textos.txt')
 
-    const config = { servidor: 'http://gestion.printboxweb.com', evento: '', timer: 5, impresora: '', delay: 5 }
+    const config = { servidor: 'https://gestion.printboxweb.com', evento: '', timer: 5, impresora: '', delay: 5 }
     const textos = { text_es: '', text_en: '', text_fr: '', text_de: '', precio1: '', precio2: '', precio3: '', empresa: '' }
 
     if (fs.existsSync(apiFile)) {
@@ -54,7 +54,7 @@ router.post('/', (req, res) => {
 
     if (config) {
       const lines = [
-        `servidor;${config.servidor || 'http://gestion.printboxweb.com'}`,
+        `servidor;${config.servidor || 'https://gestion.printboxweb.com'}`,
         `evento;${config.evento || ''}`,
         `timer;${config.timer || 5}`,
         `impresora;${config.impresora || ''}`,

@@ -5,7 +5,7 @@ const tough = require('tough-cookie')
 const fetchCookieModule = require('fetch-cookie')
 const fetchCookie = fetchCookieModule.default || fetchCookieModule
 
-const BASE = 'http://gestion.printboxweb.com'
+const BASE = 'https://gestion.printboxweb.com'
 
 // CookieJar compartido — mantiene la sesión y el token CSRF entre peticiones
 const cookieJar = new tough.CookieJar()

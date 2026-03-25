@@ -7,7 +7,7 @@ import './Printer.css'
 const APP_VERSION = '1.0.6'
 
 // URL del backend (desde Electron o localhost)
-const BACKEND = window.electronAPI?.backendUrl || 'http://localhost:4000'
+const BACKEND = "https://printbox.incomar.net"
 
 // ============================================
 // COMPONENTE PRINCIPAL - PANEL DE IMPRESIÓN
@@ -15,7 +15,7 @@ const BACKEND = window.electronAPI?.backendUrl || 'http://localhost:4000'
 export default function PrinterApp() {
   // --- Estados de configuración ---
   const [config, setConfig] = useState({
-    servidor: 'http://gestion.printboxweb.com',
+    servidor: 'https://gestion.printboxweb.com',
     evento: '',
     timer: 5,
     delay: 5,

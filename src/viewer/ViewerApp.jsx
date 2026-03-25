@@ -4,7 +4,7 @@ import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
 // URL del backend (desde Electron o localhost)
-const BACKEND = window.electronAPI?.backendUrl || 'http://localhost:4000'
+const BACKEND = window.electronAPI?.backendUrl || 'https://printbox.incomar.net'
 
 // ============================================
 // COMPONENTE PRINCIPAL - VISOR DE FOTOS
