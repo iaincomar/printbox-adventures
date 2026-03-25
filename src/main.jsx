@@ -1,19 +1,41 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import ViewerApp from './viewer/ViewerApp'
 import PrinterApp from './printer/PrinterApp'
 import MobileApp from './mobile/MobileApp'
 import './styles/global.css'
 
+// 👇 Componente para redirigir según dispositivo
+function RedirectByDevice() {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent)
+
+    if (isMobile) {
+      navigate('/mobile', { replace: true })
+    } else {
+      navigate('/viewer', { replace: true })
+    }
+  }, [])
+
+  return null
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <HashRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <HashRouter>
       <Routes>
+        {/* ruta raíz */}
+        <Route path="/" element={<RedirectByDevice />} />
+
         <Route path="/viewer"  element={<ViewerApp />} />
         <Route path="/printer" element={<PrinterApp />} />
         <Route path="/mobile"  element={<MobileApp />} />
-        <Route path="*" element={<Navigate to="/printer" replace />} />
+
+        {/* fallback */}
+        <Route path="*" element={<RedirectByDevice />} />
       </Routes>
     </HashRouter>
   </React.StrictMode>

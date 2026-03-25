@@ -4,7 +4,7 @@
 const BACKEND_URL =
   typeof window !== 'undefined' && window.electronAPI?.backendUrl
     ? window.electronAPI.backendUrl
-    : 'http://192.168.100.152:4000'
+    : ''  // En web usa rutas relativas → proxy.php en Apache
 
 // ─── API Printbox (proxiada por el backend) ──────────────────────────────────
 
