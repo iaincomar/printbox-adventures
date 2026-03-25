@@ -1,14 +1,12 @@
 Options -MultiViews
 RewriteEngine On
-RewriteBase /PrintBox_Adventure/
+RewriteBase /
 
-# Redirigir llamadas API al proxy PHP
 RewriteRule ^health$ proxy.php [L,QSA]
 RewriteRule ^config$ proxy.php [L,QSA]
 RewriteRule ^print/(.*)$ proxy.php [L,QSA]
 RewriteRule ^printbox/(.*)$ proxy.php [L,QSA]
 
-# SPA — todo lo demás va a index.html
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteRule ^ index.html [L]
