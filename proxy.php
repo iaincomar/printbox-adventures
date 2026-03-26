@@ -1,9 +1,7 @@
 <?php
-// Activar reporte de errores para depurar
 error_reporting(E_ALL);
-ini_set('display_errors', 1);
+ini_set('display_errors', 0); // No mostrar errores en producción
 
-header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
@@ -13,57 +11,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Test básico - comprobar que PHP funciona y curl está disponible
-$uri = $_SERVER['REQUEST_URI'];
-$uri = preg_replace('#^/PrintBox_Adventure#', '', $uri);
-$uri = strtok($uri, '?');
+// URI normalizada (sin barra final, sin query string)
+$uri = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$uri = rtrim($uri, '/');
+if ($uri === '') $uri = '/';
 
-// Diagnóstico
-if ($uri === '/proxy.php' || $uri === '/') {
+$PRINTBOX_BASE = 'http://gestion.printboxweb.com'; // ¡HTTP!
+$cookiePath = __DIR__ . '/pba_cookies.txt'; // Guardar en la misma carpeta
+
+// ── Diagnóstico ──
+if ($uri === '/proxy.php') {
+    header('Content-Type: application/json');
     echo json_encode([
-        'status' => 'ok',
-        'php_version' => PHP_VERSION,
-        'curl_available' => function_exists('curl_init'),
-        'uri' => $uri,
-        'tmp_dir' => sys_get_temp_dir(),
-        'tmp_writable' => is_writable(sys_get_temp_dir()),
+        'status'       => 'ok',
+        'php_version'  => PHP_VERSION,
+        'curl'         => function_exists('curl_init'),
+        'uri'          => $uri,
+        'tmp_writable' => is_writable(__DIR__),
+        'cookie_path'  => $cookiePath,
     ]);
     exit();
 }
 
 if (!function_exists('curl_init')) {
+    header('Content-Type: application/json');
     http_response_code(500);
-    echo json_encode(['error' => 'cURL no está disponible en este servidor']);
+    echo json_encode(['error' => 'cURL no disponible']);
     exit();
 }
 
-$PRINTBOX_BASE = 'http://gestion.printboxweb.com';
-$cookiePath = sys_get_temp_dir() . '/pba_cookies.txt';
-
-function getCsrfToken()
-{
+// ── Funciones helper ──
+function getCsrfToken() {
     global $PRINTBOX_BASE, $cookiePath;
     $ch = curl_init($PRINTBOX_BASE . '/sanctum/csrf-cookie');
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_COOKIEJAR, $cookiePath);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, $cookiePath);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_COOKIEJAR      => $cookiePath,
+        CURLOPT_COOKIEFILE     => $cookiePath,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 10,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    ]);
     curl_exec($ch);
     curl_close($ch);
 
     if (file_exists($cookiePath)) {
         $cookies = file_get_contents($cookiePath);
-        if (preg_match('/XSRF-TOKEN\s+([^\s]+)/', $cookies, $m)) {
+        if (preg_match('/XSRF-TOKEN\s+([^\s\r\n]+)/', $cookies, $m)) {
             return urldecode($m[1]);
         }
     }
     return null;
 }
 
-function proxyPost($url, $data, $extraHeaders = [])
-{
+function proxyPost($url, $data, $extraHeaders = []) {
     global $cookiePath;
-    $ch = curl_init($url);
     $json = json_encode($data);
     $headers = array_merge([
         'Content-Type: application/json',
@@ -71,17 +74,23 @@ function proxyPost($url, $data, $extraHeaders = [])
         'Content-Length: ' . strlen($json),
     ], $extraHeaders);
 
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
-    curl_setopt($ch, CURLOPT_COOKIEJAR, $cookiePath);
-    curl_setopt($ch, CURLOPT_COOKIEFILE, $cookiePath);
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $json,
+        CURLOPT_HTTPHEADER     => $headers,
+        CURLOPT_COOKIEJAR      => $cookiePath,
+        CURLOPT_COOKIEFILE     => $cookiePath,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    ]);
 
     $response = curl_exec($ch);
-    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $error = curl_error($ch);
+    $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $error    = curl_error($ch);
     curl_close($ch);
 
     return ['code' => $code, 'body' => $response, 'error' => $error];
@@ -90,38 +99,44 @@ function proxyPost($url, $data, $extraHeaders = [])
 $body = file_get_contents('php://input');
 $data = json_decode($body, true) ?? [];
 
-// ── /health ──────────────────────────────────────────────────────────────────
+header('Content-Type: application/json');
+
+// ── /health ──
 if ($uri === '/health') {
     echo json_encode(['ok' => true]);
     exit();
 }
 
-// ── /config GET ──────────────────────────────────────────────────────────────
+// ── /config GET ──
 if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $configDir = __DIR__ . '/config';
-    $config = ['servidor' => 'http://gestion.printboxweb.com', 'evento' => '', 'timer' => 5, 'impresora' => '', 'delay' => 5];
-    $textos = ['text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '', 'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => ''];
+    $config = [
+        'servidor'  => 'http://gestion.printboxweb.com',
+        'evento'    => '', 'timer' => 5, 'impresora' => '', 'delay' => 5,
+    ];
+    $textos = [
+        'text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '',
+        'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => '',
+    ];
 
     $apiFile = $configDir . '/servidor_api.txt';
     if (file_exists($apiFile)) {
         $lines = file($apiFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $keys = ['servidor', 'evento', 'timer', 'impresora', 'delay'];
+        $keys  = ['servidor', 'evento', 'timer', 'impresora', 'delay'];
         foreach ($lines as $i => $line) {
             $val = trim(strpos($line, ';') !== false ? explode(';', $line, 2)[1] : $line);
-            if (isset($keys[$i])) {
-                $config[$keys[$i]] = in_array($keys[$i], ['timer', 'delay']) ? ((int) $val ?: 5) : $val;
-            }
+            if (isset($keys[$i]))
+                $config[$keys[$i]] = in_array($keys[$i], ['timer','delay']) ? ((int)$val ?: 5) : $val;
         }
     }
 
     $textosFile = $configDir . '/textos.txt';
     if (file_exists($textosFile)) {
         $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $keys = ['text_es', 'text_en', 'text_fr', 'text_de', 'precio1', 'precio2', 'precio3', 'empresa'];
+        $keys  = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
         foreach ($lines as $i => $line) {
-            $val = trim(strpos($line, ':') !== false ? substr($line, strpos($line, ':') + 1) : $line);
-            if (isset($keys[$i]))
-                $textos[$keys[$i]] = $val;
+            $val = trim(strpos($line, ':') !== false ? substr($line, strpos($line,':')+1) : $line);
+            if (isset($keys[$i])) $textos[$keys[$i]] = $val;
         }
     }
 
@@ -129,29 +144,28 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     exit();
 }
 
-// ── /config POST ─────────────────────────────────────────────────────────────
+// ── /config POST ── (igual que antes) ──
 if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $configDir = __DIR__ . '/config';
-    if (!is_dir($configDir))
-        mkdir($configDir, 0755, true);
+    if (!is_dir($configDir)) mkdir($configDir, 0755, true);
 
     if (isset($data['config'])) {
         $c = $data['config'];
         file_put_contents($configDir . '/servidor_api.txt', implode("\n", [
             'servidor;' . ($c['servidor'] ?? 'http://gestion.printboxweb.com'),
-            'evento;' . ($c['evento'] ?? ''),
-            'timer;' . ($c['timer'] ?? 5),
-            'impresora;' . ($c['impresora'] ?? ''),
-            'delay;' . ($c['delay'] ?? 5),
+            'evento;'   . ($c['evento']    ?? ''),
+            'timer;'    . ($c['timer']     ?? 5),
+            'impresora;'. ($c['impresora'] ?? ''),
+            'delay;'    . ($c['delay']     ?? 5),
         ]));
     }
     if (isset($data['textos'])) {
         $t = $data['textos'];
         file_put_contents($configDir . '/textos.txt', implode("\n", [
-            'es:' . ($t['text_es'] ?? ''),
-            'en:' . ($t['text_en'] ?? ''),
-            'fr:' . ($t['text_fr'] ?? ''),
-            'de:' . ($t['text_de'] ?? ''),
+            'es:'      . ($t['text_es'] ?? ''),
+            'en:'      . ($t['text_en'] ?? ''),
+            'fr:'      . ($t['text_fr'] ?? ''),
+            'de:'      . ($t['text_de'] ?? ''),
             'precio1:' . ($t['precio1'] ?? ''),
             'precio2:' . ($t['precio2'] ?? ''),
             'precio3:' . ($t['precio3'] ?? ''),
@@ -162,24 +176,15 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
-// ── /print/count ─────────────────────────────────────────────────────────────
-if ($uri === '/print/count') {
-    echo json_encode(['count' => 0]);
-    exit();
-}
-if ($uri === '/print/printers') {
-    echo json_encode(['printers' => []]);
-    exit();
-}
-if ($uri === '/print/job') {
-    echo json_encode(['ok' => true, 'count' => 0]);
-    exit();
-}
+// ── /print/* (simulados) ──
+if ($uri === '/print/count')    { echo json_encode(['count' => 0]);          exit(); }
+if ($uri === '/print/printers') { echo json_encode(['printers' => []]);       exit(); }
+if ($uri === '/print/job')      { echo json_encode(['ok' => true, 'count' => 0]); exit(); }
 
-// ── /printbox/* ───────────────────────────────────────────────────────────────
+// ── /printbox/* ──
 if (strpos($uri, '/printbox/') === 0) {
     getCsrfToken();
-    $csrf = getCsrfToken();
+    $csrf    = getCsrfToken();
     $headers = $csrf ? ['X-XSRF-TOKEN: ' . $csrf] : [];
 
     if ($uri === '/printbox/find-event') {
@@ -193,81 +198,60 @@ if (strpos($uri, '/printbox/') === 0) {
         if ($result['code'] === 200 && isset($resp['data']['uuid'])) {
             echo json_encode(['uuid' => $resp['data']['uuid']]);
         } else {
-            http_response_code($result['code']);
-            echo $result['body'];
+            http_response_code($result['code'] ?: 500);
+            echo $result['body'] ?: json_encode(['error' => 'Sin respuesta del servidor']);
         }
         exit();
     }
 
     if ($uri === '/printbox/photos') {
-        $page = $_GET['page'] ?? 1;
+        $page   = $_GET['page'] ?? 1;
         $result = proxyPost($PRINTBOX_BASE . '/api/v1/events/photos?page=' . $page, $data, $headers);
-        http_response_code($result['code']);
-        echo $result['body'];
+        http_response_code($result['code'] ?: 500);
+        echo $result['body'] ?: json_encode(['error' => 'Sin respuesta']);
         exit();
     }
 
     if ($uri === '/printbox/photos-to-print') {
         $result = proxyPost($PRINTBOX_BASE . '/api/v1/events/photos_two', $data, $headers);
-        http_response_code($result['code']);
-        echo $result['body'];
+        http_response_code($result['code'] ?: 500);
+        echo $result['body'] ?: json_encode(['error' => 'Sin respuesta']);
         exit();
     }
 
     if ($uri === '/printbox/photo-send') {
         $result = proxyPost($PRINTBOX_BASE . '/api/v1/events/photo/send', $data, $headers);
-        http_response_code($result['code']);
-        echo $result['body'];
+        http_response_code($result['code'] ?: 500);
+        echo $result['body'] ?: json_encode(['error' => 'Sin respuesta']);
         exit();
     }
+}
 
-    // ── PROXY DE IMÁGENES (evita errores HTTPS) ──
-    if (strpos($uri, '/proxy-image') === 0) {
-        // Extraer la ruta real de la imagen (eliminar /proxy-image)
-        $imagePath = substr($uri, strlen('/proxy-image'));
-        // Construir URL real (usando HTTP, no HTTPS)
-        $imageUrl = 'http://gestion.printboxweb.com' . $imagePath;
+// ── Proxy de imágenes (con HTTP) ──
+if (strpos($uri, '/proxy-image/') === 0) {
+    $imagePath = substr($uri, strlen('/proxy-image'));
+    $imageUrl  = 'http://gestion.printboxweb.com' . $imagePath; // forzamos HTTP
 
-        $ch = curl_init($imageUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        $imageData = curl_exec($ch);
-        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-        curl_close($ch);
+    $ch = curl_init($imageUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    ]);
+    $imageData   = curl_exec($ch);
+    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+    curl_close($ch);
 
-        if ($imageData) {
-            header('Content-Type: ' . $contentType);
-            echo $imageData;
-        } else {
-            http_response_code(404);
-            echo 'Imagen no encontrada';
-        }
-        exit();
+    if ($imageData) {
+        header('Content-Type: ' . $contentType);
+        echo $imageData;
+    } else {
+        http_response_code(404);
+        echo json_encode(['error' => 'Imagen no encontrada']);
     }
-
-    // ── PROXY DE IMÁGENES (evita errores HTTPS) ──
-    if (strpos($uri, '/proxy-image') === 0) {
-        $imagePath = substr($uri, strlen('/proxy-image'));
-        $imageUrl = 'http://gestion.printboxweb.com' . $imagePath;
-
-        $ch = curl_init($imageUrl);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-        curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
-        $imageData = curl_exec($ch);
-        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-        curl_close($ch);
-
-        if ($imageData) {
-            header('Content-Type: ' . $contentType);
-            echo $imageData;
-        } else {
-            http_response_code(404);
-            echo 'Imagen no encontrada';
-        }
-        exit();
-    }
+    exit();
 }
 
 http_response_code(404);

@@ -7,6 +7,20 @@ import './Viewer.css'
 const BACKEND = window.electronAPI?.backendUrl || 'https://printbox.incomar.net'
 
 // ============================================
+// FUNCIÓN PARA CORREGIR URLs DE IMÁGENES
+// ============================================
+function fixImageUrl(url) {
+  if (!url) return ''
+
+  try {
+    const parsed = new URL(url)
+    return '/proxy-image' + parsed.pathname
+  } catch {
+    return url
+  }
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL - VISOR DE FOTOS
 // ============================================
 export default function ViewerApp() {
@@ -231,7 +245,7 @@ export default function ViewerApp() {
                 <div className="row g-0">
                   <div className="col-md-7 print-image-container">
                     <img
-                      src={(selectedPhoto.uri || selectedPhoto.uri_full).replace('https://gestion.printboxweb.com', '/proxy-image')}
+                      src={fixImageUrl(selectedPhoto.uri || selectedPhoto.uri_full)}
                       alt="Foto seleccionada"
                       className="print-image"
                     />
@@ -370,8 +384,7 @@ export default function ViewerApp() {
 // COMPONENTE DE TARJETA DE FOTO (con imagen proxy)
 // ============================================
 function PhotoCard({ photo, onSelect }) {
-  const thumb = (photo.uri || photo.uri_full).replace('https://gestion.printboxweb.com', '/proxy-image')
-
+const thumb = fixImageUrl(photo.uri || photo.uri_full)
   return (
     <button
       className="viewer-photo-card btn p-0 w-100 border-2 rounded-3 overflow-hidden position-relative"

@@ -393,6 +393,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ Alerta impresora offline | `PrinterApp.jsx` | Barra roja si la impresora no se encuentra. Comprueba cada 30s |
 | ✅ App móvil web | `mobile/MobileApp.jsx` | Galería completa, cámara, selección, pedido y precios |
 | ✅ Auto-actualización | `electron/main.js` | Comprueba GitHub Releases al arrancar. Barra amarilla de aviso + instala al cerrar |
+| ✅ Proxy de imágenes | `viewer/ViewerApp.jsx`, `mobile/MobileApp.jsx` | Convierte URLs de imágenes a rutas relativas para evitar CORS |
 
 ---
 
@@ -427,6 +428,50 @@ Solo funciona en HTTPS. En desarrollo local solo funciona la galería.
 
 **App móvil "evento no encontrado" desde móvil**  
 La IP en `src/shared/api.js` debe ser la IP del PC, no `localhost`. Solo para desarrollo.
+
+### 🔧 Corrección de URLs de imágenes (CORS fix)
+
+**Problema:**  
+Las imágenes de `https://gestion.printboxweb.com` no cargaban en ViewerApp y MobileApp. El método antiguo (`.replace('gestion.printboxweb.com', '/proxy-image')`) generaba rutas inválidas como `http://proxy-image/...`.
+
+**Solución implementada (Marzo 2026):**  
+Se reemplazó el método simple de encuentra-y-reemplaza con una función robusta que:
+
+1. **ViewerApp.jsx** - Nueva función `fixImageUrl()`:
+```javascript
+function fixImageUrl(url) {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    return '/proxy-image' + parsed.pathname
+  } catch {
+    return url
+  }
+}
+```
+
+2. **MobileApp.jsx** - Actualización de `getImageUrl()`:
+```javascript
+const getImageUrl = (url) => {
+  if (!url) return ''
+  try {
+    const parsed = new URL(url)
+    return '/proxy-image' + parsed.pathname
+  } catch {
+    return url
+  }
+}
+```
+
+**Resultado:**
+- ✅ Las imágenes se cargan correctamente vía proxy en Viewer
+- ✅ La galería y captura de cámara funciona en app móvil
+- ✅ Sin errores CORS
+- ✅ Compatible con URLs absolutas, relativas y malformadas
+
+**Archivos modificados:**
+- `src/viewer/ViewerApp.jsx` (línea 10-20)
+- `src/mobile/MobileApp.jsx` (línea 75-85)
 
 ---
 

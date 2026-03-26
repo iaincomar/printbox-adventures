@@ -7,6 +7,7 @@ RewriteRule ^health$ proxy.php [L,QSA]
 RewriteRule ^config/?$ proxy.php [L,QSA]
 RewriteRule ^print/.*$ proxy.php [L,QSA]
 RewriteRule ^printbox/.*$ proxy.php [L,QSA]
+RewriteRule ^proxy-image/.*$ proxy.php [L,QSA] 
 
 # React Router: todo lo demás a index.html
 RewriteCond %{REQUEST_FILENAME} !-f

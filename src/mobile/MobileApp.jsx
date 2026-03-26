@@ -77,8 +77,12 @@ export default function MobileApp() {
   // ============================================
   const getImageUrl = (url) => {
     if (!url) return ''
-    // Reemplazar el dominio original por el proxy de imágenes
-    return url.replace('https://gestion.printboxweb.com', '/proxy-image')
+    try {
+      const parsed = new URL(url)
+      return '/proxy-image' + parsed.pathname
+    } catch {
+      return url
+    }
   }
 
   // ============================================
