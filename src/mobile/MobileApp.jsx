@@ -47,6 +47,7 @@ export default function MobileApp() {
   const [uuid, setUuid] = useState(null)                 // UUID del evento (devuelto por API)
   const [textos, setTextos] = useState({})               // Textos y precios del evento
   const [loading, setLoading] = useState(false)          // Estado de carga
+  const [loadingFromQR, setLoadingFromQR] = useState(false) // Cargando desde QR
 
   // --- Estados de galería ---
   const [photos, setPhotos] = useState([])               // Lista de fotos del evento
@@ -98,6 +99,45 @@ export default function MobileApp() {
   }
 
   // ============================================
+  // FUNCIONES DE LOCALSTORAGE
+  // ============================================
+
+  const saveToLocalStorage = () => {
+    const data = {
+      eventCode,
+      step,
+      selected,
+      capturedPhotos,
+      uuid,
+      page,
+      lastPage
+    }
+    localStorage.setItem('printbox_mobile_state', JSON.stringify(data))
+  }
+
+  const loadFromLocalStorage = () => {
+    const data = localStorage.getItem('printbox_mobile_state')
+    if (data) {
+      try {
+        const parsed = JSON.parse(data)
+        setEventCode(parsed.eventCode || '')
+        setStep(parsed.step || STEP_EVENT)
+        setSelected(parsed.selected || [])
+        setCapturedPhotos(parsed.capturedPhotos || [])
+        setUuid(parsed.uuid || null)
+        setPage(parsed.page || 1)
+        setLastPage(parsed.lastPage || 1)
+        return parsed
+      } catch (e) {
+        console.error('Error loading from localStorage:', e)
+      }
+    }
+    return null
+  }
+
+  // ============================================
+
+  // ============================================
   // EFECTOS DE INICIALIZACIÓN
   // ============================================
 
@@ -129,19 +169,39 @@ export default function MobileApp() {
   }, [])
 
   /**
-   * Leer evento de la URL y cargar configuración
-   * Ejemplo: #?evento=ev-123456
+   * Cargar estado desde localStorage y procesar URL
    */
   useEffect(() => {
+    // Cargar desde localStorage
+    const saved = loadFromLocalStorage()
+
+    // Leer evento de la URL
     const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
     const ev = params.get('evento')
     if (ev) {
-      setEventCode(ev.replace('ev-', ''))
+      const code = ev.replace('ev-', '')
+      setEventCode(code)
+      setLoadingFromQR(true)
+      // Auto-conectar si viene de QR
+      setTimeout(() => handleConnectEvent(code), 100)
+    } else if (saved && saved.eventCode && saved.step !== STEP_EVENT) {
+      // Si hay estado guardado y no viene de QR, intentar reconectar
+      setTimeout(() => handleConnectEvent(saved.eventCode), 100)
     }
+
     getConfig().then(d => {
       if (d.textos) setTextos(d.textos)
     }).catch(() => {})
   }, [])
+
+  /**
+   * Guardar estado en localStorage cuando cambie
+   */
+  useEffect(() => {
+    saveToLocalStorage()
+  }, [eventCode, step, selected, capturedPhotos, uuid, page, lastPage])
+
+  // ============================================
 
   // ============================================
   // FUNCIONES UTILITARIAS
@@ -164,16 +224,16 @@ export default function MobileApp() {
   /**
    * Conectar al evento con el código ingresado
    */
-  async function handleConnectEvent() {
-    const code = eventCode.trim()
-    if (!code) {
+  async function handleConnectEvent(code = null) {
+    const eventCodeToUse = code || eventCode.trim()
+    if (!eventCodeToUse) {
       setEventError('Introduce el número del evento')
       return
     }
     setLoading(true)
     setEventError('')
     try {
-      const id = await findEvent(`ev-${code}`)
+      const id = await findEvent(`ev-${eventCodeToUse}`)
       setUuid(id)
       uuidRef.current = id
       await loadPhotos(id, 1)
@@ -355,6 +415,14 @@ export default function MobileApp() {
   }
 
   /**
+   * Remover una foto capturada
+   * @param {number} id - ID único de la foto capturada
+   */
+  function removeCaptured(id) {
+    setCapturedPhotos(prev => prev.filter(p => p.id !== id))
+  }
+
+  /**
    * Subir una foto directamente sin hacer pedido
    * @param {Object} photo - Foto capturada { dataUrl, copies, id }
    */
@@ -487,6 +555,20 @@ export default function MobileApp() {
 
   // --- PASO 1: EVENTO ---
   if (step === STEP_EVENT) {
+    if (loadingFromQR) {
+      return (
+        <div className="mobile-app event-container">
+          <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-logo" />
+          <h1 className="event-title">PrintboxAdventures</h1>
+          <p className="event-subtitle">Cargando evento...</p>
+          <div className="d-flex justify-content-center">
+            <span className="spinner-border text-warning" style={{ width: '3rem', height: '3rem' }} />
+          </div>
+          {toast && <div className="mobile-toast">{toast}</div>}
+        </div>
+      )
+    }
+
     return (
       <div className="mobile-app event-container">
         <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-logo" />
@@ -538,34 +620,15 @@ export default function MobileApp() {
         <div className="mobile-header d-flex align-items-center gap-2">
           <img src="/assets/MoscaPrintbox.png" alt="" className="mobile-header-logo" />
           <div className="flex-grow-1">
-            <div className="mobile-header-title">Elige tus fotos</div>
-            <div className="mobile-header-subtitle">Toca para seleccionar • ev-{eventCode}</div>
+            <div className="mobile-header-title">
+              🇪🇸 Elige tus fotos para imprimir<br />
+              🇺🇸 Choose your photos to print
+            </div>
+            <div className="mobile-header-subtitle">ev-{eventCode}</div>
           </div>
-          <button
-            className="btn btn-sm btn-outline-warning mobile-header-edit"
-            onClick={() => {
-              setStep(STEP_EVENT)
-              setPhotos([])
-              setSelected([])
-              setCapturedPhotos([])
-            }}
-          >
-            <i className="bi bi-pencil" />
-          </button>
         </div>
 
         <StepDots />
-
-        {/* Botón para abrir cámara */}
-        <div className="camera-button">
-          <button
-            className="btn btn-outline-warning w-100 fw-semibold"
-            onClick={() => setStep(STEP_CAMERA)}
-          >
-            <i className="bi bi-camera me-2" />
-            Hacer una foto nueva
-          </button>
-        </div>
 
         {/* Grid de fotos */}
         {loadingPhotos ? (
@@ -580,7 +643,7 @@ export default function MobileApp() {
                 className={`mobile-photo-card ${isSelected(photo) ? 'selected' : ''}`}
                 onClick={() => toggleSelect(photo)}
               >
-                <img src={getImageUrl(photo.uri)} alt="" loading="lazy" />
+                <img src={getImageUrl(photo.uri)} alt="" loading="lazy" draggable={false} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
                 {isSelected(photo) && (
                   <div className="selected-badge">
                     <i className="bi bi-check" />
@@ -655,7 +718,7 @@ export default function MobileApp() {
               <div className="captured-thumbnails">
                 {capturedPhotos.map(p => (
                   <div key={p.id} className="captured-thumb-wrapper">
-                    <img src={p.dataUrl} alt="" className="captured-thumb" />
+                    <img src={p.dataUrl} alt="" className="captured-thumb" draggable={false} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
                     <button
                       className="btn btn-sm btn-danger captured-remove-btn"
                       onClick={() => removeCaptured(p.id)}
@@ -731,7 +794,7 @@ export default function MobileApp() {
           {/* Fotos de galería */}
           {selected.map((photo, i) => (
             <div key={i} className="order-photo-item">
-              <img src={getImageUrl(photo.uri)} alt="" className="order-photo-thumb" />
+              <img src={getImageUrl(photo.uri)} alt="" className="order-photo-thumb" draggable={false} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
               <div className="order-photo-info">
                 <div className="order-photo-label">Foto del evento</div>
                 <div className="order-copies-selector">
@@ -762,7 +825,7 @@ export default function MobileApp() {
           {/* Fotos de cámara */}
           {capturedPhotos.map((photo) => (
             <div key={photo.id} className="order-photo-item">
-              <img src={photo.dataUrl} alt="" className="order-photo-thumb" />
+              <img src={photo.dataUrl} alt="" className="order-photo-thumb" draggable={false} onContextMenu={(e) => e.preventDefault()} onDragStart={(e) => e.preventDefault()} />
               <div className="order-photo-info">
                 <div className="order-photo-label">Foto tomada</div>
                 <div className="order-copies-selector">
@@ -799,7 +862,7 @@ export default function MobileApp() {
           {/* Nota de pago */}
           <div className="alert alert-secondary order-payment-note">
             <i className="bi bi-credit-card text-warning" />
-            El operador se acercará con el datáfono para cobrar
+            El pago se realizará con tarjeta, Google Pay, etc. desde el móvil
           </div>
         </div>
 
@@ -836,20 +899,23 @@ export default function MobileApp() {
         <div className="success-icon">🎉</div>
         <h2 className="success-title">¡Pedido enviado!</h2>
         <p className="success-text">
-          El operador recibirá tu pedido y se acercará con el datáfono para cobrar.
+          Tu pedido ha sido enviado. El pago se realizará con tarjeta, Google Pay, etc. desde el móvil.
         </p>
         <p className="success-small-text">Tus fotos se imprimirán en breve.</p>
 
         <button
           className="btn btn-outline-warning back-button"
           onClick={() => {
+            // No volver, finalizar
+            setStep(STEP_EVENT)
             setSelected([])
             setCapturedPhotos([])
-            setStep(STEP_GALLERY)
+            setEventCode('')
+            setUuid(null)
           }}
         >
-          <i className="bi bi-arrow-left me-2" />
-          Volver a la galería
+          <i className="bi bi-check-circle me-2" />
+          Finalizar
         </button>
 
         {textos?.empresa && (

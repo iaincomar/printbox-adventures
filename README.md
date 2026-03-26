@@ -395,10 +395,20 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ App móvil web | `mobile/MobileApp.jsx` | Galería completa, cámara, selección, pedido y precios |
 | ✅ Auto-actualización | `electron/main.js` | Comprueba GitHub Releases al arrancar. Barra amarilla de aviso + instala al cerrar |
 | ✅ Proxy de imágenes | `viewer/ViewerApp.jsx`, `mobile/MobileApp.jsx` | Convierte URLs de imágenes a rutas relativas para evitar CORS |
-| ✅ QR código evento | `viewer/ViewerApp.jsx` | Botón para mostrar QR → escanear acceso directo a app móvil |
-| ✅ Autoplay viewer | `viewer/ViewerApp.jsx` | Botón para cambiar de página automáticamente cada 5 segundos |
-| ✅ Envío fotos móvil directo | `mobile/MobileApp.jsx` | Fotos tomadas con cámara se envían sin costo adicional |
-| ✅ Paginación mobile | `mobile/MobileApp.jsx` | Infinite scroll en galería para evitar saturación del proxy |
+| ✅ QR código evento | `viewer/ViewerApp.jsx` | Botón para mostrar QR → escanear acceso directo a app móvil (Marzo 2026) |
+| ✅ Autoplay viewer | `viewer/ViewerApp.jsx` | Botón para cambiar de página automáticamente cada 5 segundos (Marzo 2026) |
+| ✅ Botones con fondo | `viewer/ViewerApp.jsx` | QR y Autoplay con `bg-dark border-*` para mejor visibilidad (Marzo 2026) |
+| ✅ Envío fotos móvil directo | `mobile/MobileApp.jsx` | Fotos tomadas con cámara se envían sin costo adicional (Marzo 2026) |
+| ✅ Paginación mobile | `mobile/MobileApp.jsx` | Infinite scroll en galería para evitar saturación del proxy (Marzo 2026) |
+| ✅ Paginación viewer client-side | `viewer/ViewerApp.jsx` | 10 fotos por página (2 filas × 5 columnas), carga inicial completa (Marzo 2026) |
+| ✅ Grid layouts optimizados | `viewer/Viewer.css`, `mobile/Mobile.css` | Viewer: 5 columnas, Mobile: 3 columnas para mejor visualización (Marzo 2026) |
+| ✅ Prevención descarga imágenes | `viewer/ViewerApp.jsx`, `mobile/MobileApp.jsx` | Bloquea click derecho, drag-drop y descarga en todas las imágenes (Marzo 2026) |
+| ✅ Prevención capturas pantalla | `electron/main.js`, `mobile/Mobile.css` | Bloquea Print Screen en Electron + desactiva selección en web (Marzo 2026) |
+| ✅ Persistencia localStorage | `mobile/MobileApp.jsx` | Guarda selecciones y pedido entre recargas de página (Marzo 2026) |
+| ✅ Entrada automática QR | `mobile/MobileApp.jsx` | No muestra modal de entrada, va directamente a galería desde QR (Marzo 2026) |
+| ✅ Pantalla carga QR | `mobile/MobileApp.jsx` | "Cargando evento..." amigable al acceder vía QR (Marzo 2026) |
+| ✅ Flujo simplificado mobile | `mobile/MobileApp.jsx` | Botón editar removido, sin "Hacer foto nueva", texto bilingüe (Marzo 2026) |
+| ✅ Pago mobile actualizado | `mobile/MobileApp.jsx` | Cambio de "datáfono" a "tarjeta, Google Pay, etc." (Marzo 2026) |
 
 ---
 
@@ -438,6 +448,104 @@ La IP en `src/shared/api.js` debe ser la IP del PC, no `localhost`. Solo para de
 
 ## 14.1. ✨ Nuevas características (Marzo 2026)
 
+### � Mejoras UI/UX
+
+#### Botones con Fondo en Viewer
+- **QR y Autoplay:** Ahora tienen fondo oscuro con borde de color para mejor visibilidad
+- Estilos: `bg-dark border-success` y `bg-dark border-info`
+
+#### Texto Bilingüe en Mobile
+- Header de galería muestra: **🇪🇸 Elige tus fotos para imprimir • Choose your photos to print 🇺🇸**
+- Código de evento en subtítulo separado: **`ev-{eventCode}`**
+- Layout más limpio y organizado
+
+#### Cambios en el Flujo Mobile
+- ✅ **Botón de editar removido** — Una vez dentro del evento, no se puede cambiar
+- ✅ **Sin botón "Hacer foto nueva"** — La cámara solo funciona en orden/pedido
+- ✅ **Entrada automática desde QR** — No muestra modal de entrada, va directamente a galería
+- ✅ **Pantalla de carga amigable** — "Cargando evento..." con spinner cuando accede vía QR
+
+#### Cambios en el Pago
+- **Nuevo texto:** "El pago se realizará con tarjeta, Google Pay, etc. desde el móvil"
+- Reemplaza el obsoleto: "El operador se acercará con el datáfono"
+- Aparece en la pantalla de resumen del pedido y en la de éxito
+
+#### Cambio Viewer
+- **Título modal evento:** "Introduce el código de evento" (más claro que "¿Cuál es el evento?")
+
+---
+
+### 🔒 Seguridad & Privacidad
+
+#### Prevención de Descarga de Imágenes
+- `onContextMenu={(e) => e.preventDefault()}` en todas las imágenes
+- `onDragStart={(e) => e.preventDefault()}` para bloquear drag
+- `draggable={false}` en elementos img
+- Aplicado a:
+  - Galería móvil
+  - Miniaturas de fotos capturadas
+  - Modal de impresión en Viewer
+  - Resumen de pedido
+
+**Archivos modificados:**
+- `src/viewer/ViewerApp.jsx` — Componente `PhotoCard`, modal de impresión
+- `src/mobile/MobileApp.jsx` — Galería, cámara, resumen de orden
+
+#### Prevención de Capturas de Pantalla
+- **Electron:** Bloquea Print Screen con `globalShortcut`
+  - `PrintScreen`, `Alt+PrintScreen`, `Ctrl+PrintScreen`
+  - Se limpian al cerrar la app
+  - Archivo: `electron/main.js`
+
+- **Web (Mobile):** Desactiva selección de texto
+  - `user-select: none`
+  - `-webkit-touch-callout: none`
+  - Archivo: `src/mobile/Mobile.css`
+
+> ⚠️ En navegadores móviles, los atajos de SO (vol+ power, etc.) **no se pueden bloquear**. Esto requeriría app nativa.
+
+---
+
+### 💾 Persistencia en LocalStorage
+
+#### Guardado Automático
+El estado del móvil se guarda automáticamente en `localStorage`:
+- Código de evento
+- Fotos seleccionadas (galerías)
+- Fotos capturadas con cámara
+- Número de copias por foto
+- Paso/página actual
+
+#### Restauración al Recargar
+Si el usuario:
+1. **Recarga la página** (`F5`/`Ctrl+R`) → Se restaura el estado anterior
+2. **Cierra y abre el navegador** → Vuelve a la galería con sus selecciones
+3. **Viene de QR** → Va directamente a la galería (sin necesidad de re-entrar evento)
+
+**Implementación:**
+```javascript
+// En MobileApp.jsx
+const saveToLocalStorage = () => {
+  const data = { eventCode, step, selected, capturedPhotos, uuid, ... }
+  localStorage.setItem('printbox_mobile_state', JSON.stringify(data))
+}
+
+const loadFromLocalStorage = () => {
+  const data = localStorage.getItem('printbox_mobile_state')
+  return JSON.parse(data) // Restaura todos los estados
+}
+
+// Se ejecuta en useEffect al montar y cada vez que algo cambia
+useEffect(() => {
+  saveToLocalStorage()
+}, [eventCode, step, selected, capturedPhotos, uuid, page, lastPage])
+```
+
+**Archivos modificados:**
+- `src/mobile/MobileApp.jsx` (líneas ~140-170)
+
+---
+
 ### 🎥 Fotos de cámara en móvil - Sin costo
 
 Cuando el usuario toma fotos con la cámara del móvil desde `/#/mobile`, éstas:
@@ -455,10 +563,12 @@ Cuando el usuario toma fotos con la cámara del móvil desde `/#/mobile`, éstas
 5. Servidor imprime sin pasar por carrito de compra
 ```
 
+---
+
 ### 📱 QR código de evento (Viewer)
 
 El **Panel de Control (Viewer)** ahora incluye:
-- **Botón "Mostrar QR"** en el header
+- **Botón "Mostrar QR"** en el header con fondo
 - Genera un QR con la URL completa: `printbox.incomar.net/#/mobile?evento=ev-XXXXXX`
 - Los clientes **escanean con su móvil** y acceden directamente sin escribir código
 - QR se muestra en modal emergente
@@ -469,10 +579,12 @@ Operador → Botón "Mostrar QR" → Proyecta pantalla
 Cliente → Escanea QR con móvil → App abre automáticamente
 ```
 
+---
+
 ### ▶️ Autoplay en Viewer
 
 Para un **efecto de diaporama/carrusel**:
-- **Botón "Autoplay ON/OFF"** en el header del Viewer
+- **Botón "Autoplay ON/OFF"** en el header del Viewer con fondo
 - Cuando está activado → cambia de página cada **5 segundos**
 - Cicla automáticamente: página 1 → 2 → 3 → ... → última → vuelve a 1
 - Perfecto para proyectar fotos en pantalla grande
@@ -487,6 +599,8 @@ Operador → Botón "Autoplay OFF" para parar
 **Configuración:**
 - Intervalo: **5 segundos** (editable en código: `useInterval` de ViewerApp.jsx)
 - Se pausa si el operador hace click manual en paginación
+
+---
 
 ### 💳 Google Pay (Pendiente - Q2 2026)
 
@@ -521,6 +635,8 @@ const payWithGooglePay = async (amount) => {
   await sendPhoto({ event: uuid, image, times, paymentToken: response.paymentMethodData })
 }
 ```
+
+---
 
 ### 🔧 Corrección de URLs de imágenes (CORS fix)
 
@@ -566,6 +682,7 @@ const getImageUrl = (url) => {
 - `src/viewer/ViewerApp.jsx` (línea 10-20)
 - `src/mobile/MobileApp.jsx` (línea 75-85)
 
+
 ---
 
 ## 15. Pendientes / Ideas de mejora
@@ -574,10 +691,11 @@ const getImageUrl = (url) => {
 - [ ] Versión visible en la app (header del Printer)
 - [ ] Notificación toast al imprimir
 - [ ] Sonido de confirmación al imprimir
+- [ ] Pago integrado (Google Pay, Stripe, etc.)
 
 ### Viewer
-- [ ] Autoplay / slideshow automático
-- [ ] QR dinámico con código de evento en la URL
+- [x] QR dinámico con código de evento en la URL ✅ Marzo 2026
+- [x] Autoplay / slideshow automático ✅ Marzo 2026
 
 ### Printer
 - [ ] Historial de impresiones con miniatura y hora
@@ -585,12 +703,18 @@ const getImageUrl = (url) => {
 - [ ] Estadísticas del evento (fotos impresas, ingresos estimados)
 
 ### App móvil
+- [x] Deshabilitación de editar evento ✅ Marzo 2026
+- [x] Persistencia en localStorage ✅ Marzo 2026
+- [x] Entrada automática desde QR ✅ Marzo 2026
+- [x] Prevención de descarga de imágenes ✅ Marzo 2026
+- [x] Texto bilingüe (español/inglés) ✅ Marzo 2026
 - [ ] Despliegue en IONOS con HTTPS (necesario para la cámara)
-- [ ] QR dinámico que incluya el código del evento
 - [ ] PWA manifest para instalar en pantalla de inicio
 
 ### Técnicas
 - [x] Auto-actualización (electron-updater) — GitHub Releases
+- [x] Bloqueo de capturas de pantalla (Electron) ✅ Marzo 2026
+- [x] Prevención de capturas en web (CSS) ✅ Marzo 2026
 - [ ] Log de errores en disco
 
 ---

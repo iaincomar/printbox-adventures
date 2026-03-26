@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog } = require('electron')
+const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog, globalShortcut } = require('electron')
 const { autoUpdater } = require('electron-updater')
 const log = require('electron-log')
 const path = require('path')
@@ -186,6 +186,17 @@ function createWindows() {
     }
   })
 
+  // Prevenir capturas de pantalla
+  globalShortcut.register('PrintScreen', () => {
+    // No hacer nada para prevenir captura
+  })
+  globalShortcut.register('Alt+PrintScreen', () => {
+    // No hacer nada
+  })
+  globalShortcut.register('Ctrl+PrintScreen', () => {
+    // No hacer nada
+  })
+
   if (splashWin) {
     splashWin.close()
     splashWin = null
@@ -226,7 +237,10 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {})
-app.on('before-quit', () => { app.isQuitting = true })
+app.on('before-quit', () => { 
+  app.isQuitting = true
+  globalShortcut.unregisterAll()
+})
 
 app.on('web-contents-created', (_, wc) => {
   wc.on('before-input-event', (e, input) => {

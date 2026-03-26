@@ -41,12 +41,14 @@ export default function ViewerApp() {
   const [textos, setTextos] = useState(null)
   const [uuid, setUuid] = useState(null)
   const [photos, setPhotos] = useState([])
+  const [allPhotos, setAllPhotos] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
   const [lastPage, setLastPage] = useState(1)
   const [printCount, setPrintCount] = useState(0)
   const [error, setError] = useState(null)
   const [showQR, setShowQR] = useState(false)
   const [autoplay, setAutoplay] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   // --- Estados de modales ---
   const [showEventModal, setShowEventModal] = useState(false)
@@ -116,23 +118,57 @@ export default function ViewerApp() {
   // CARGA DE FOTOS
   // ============================================
 
-  const loadPhotos = useCallback(async () => {
+  const loadAllPhotos = useCallback(async () => {
     if (!uuid) return
     try {
-      const { photos: p, lastPage: lp } = await getEventPhotos(uuid, currentPage)
-      setPhotos(p)
-      setLastPage(lp)
+      setLoading(true)
+      // Cargar solo las primeras 5 páginas inicialmente (50 fotos) para evitar rate limiting
+      const allPhotos = []
+      let page = 1
+      const maxInitialPages = 5 // Limitar a 5 páginas iniciales
+
+      while (page <= maxInitialPages) {
+        try {
+          const { photos: p, lastPage: lp } = await getEventPhotos(uuid, page)
+          allPhotos.push(...p)
+
+          // Si esta es la última página disponible, salir del bucle
+          if (page >= lp) break
+
+          page++
+
+          // Pequeño delay entre peticiones para evitar rate limiting
+          if (page <= maxInitialPages) {
+            await new Promise(resolve => setTimeout(resolve, 200))
+          }
+        } catch (e) {
+          // Si hay error de rate limiting, parar la carga
+          if (e.message.includes('429') || e.message.includes('Too Many Requests')) {
+            console.warn('Rate limiting alcanzado, cargando fotos disponibles hasta ahora')
+            break
+          }
+          throw e
+        }
+      }
+
+      setAllPhotos(allPhotos)
+      setLastPage(Math.ceil(allPhotos.length / 10)) // 10 fotos por página
       setError(null)
     } catch (e) {
       setError(`Error al cargar fotos: ${e.message}`)
+    } finally {
+      setLoading(false)
     }
-  }, [uuid, currentPage])
+  }, [uuid])
+
+  // Calcular fotos para la página actual (10 por página)
+  const currentPhotos = allPhotos.slice((currentPage - 1) * 10, currentPage * 10)
 
   useEffect(() => {
-    loadPhotos()
-  }, [loadPhotos])
+    loadAllPhotos()
+  }, [loadAllPhotos])
 
-  useInterval(loadPhotos, uuid ? (config?.timer || 5) * 1000 : null)
+  useInterval(loadAllPhotos, uuid ? (config?.timer || 5) * 1000 : null)
 
   // Autoplay: cambiar página automáticamente cada 5 segundos si está activado
   useInterval(
@@ -204,7 +240,7 @@ export default function ViewerApp() {
             <div className="modal-content bg-dark border border-secondary event-modal">
               <div className="modal-body text-center p-4 p-md-5">
                 <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-modal-logo" />
-                <h4 className="event-modal-title">¿Cuál es el evento?</h4>
+                <h4 className="event-modal-title">Introduce el código de evento</h4>
                 <p className="event-modal-subtitle">Introduce el número del evento</p>
 
                 <div className="input-group mb-2 event-modal-input-group">
@@ -274,6 +310,9 @@ export default function ViewerApp() {
                       src={fixImageUrl(selectedPhoto.uri || selectedPhoto.uri_full)}
                       alt="Foto seleccionada"
                       className="print-image"
+                      draggable={false}
+                      onContextMenu={(e) => e.preventDefault()}
+                      onDragStart={(e) => e.preventDefault()}
                     />
                   </div>
 
@@ -347,7 +386,7 @@ export default function ViewerApp() {
             flexWrap: 'wrap'
           }}>
             <button
-              className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'}`}
+              className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'} bg-dark border-success`}
               onClick={() => setAutoplay(!autoplay)}
               title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (5s por página)'}
             >
@@ -356,7 +395,7 @@ export default function ViewerApp() {
             </button>
             
             <button
-              className="btn btn-sm btn-outline-info"
+              className="btn btn-sm btn-outline-info bg-dark border-info"
               onClick={() => setShowQR(!showQR)}
               title="Mostrar QR del evento"
             >
@@ -407,17 +446,20 @@ export default function ViewerApp() {
             <i className="bi bi-camera empty-icon" />
             <p className="empty-text">Introduce el evento para ver las fotos</p>
           </div>
-        ) : photos.length === 0 ? (
+        ) : loading ? (
+          <div className="viewer-gallery-empty">
+            <i className="bi bi-hourglass-split empty-icon spin" />
+            <p className="empty-text">Cargando fotos…</p>
+          </div>
+        ) : currentPhotos.length === 0 ? (
           <div className="viewer-gallery-empty">
             <i className="bi bi-hourglass-split empty-icon" />
             <p className="empty-text">Esperando fotos de <strong>{config?.evento}</strong>…</p>
           </div>
         ) : (
-          <div className="row g-2 g-md-3 justify-content-center">
-            {photos.map(photo => (
-              <div key={photo.id || photo.uri} className="col-6 col-sm-4 col-md-3 col-lg-2">
-                <PhotoCard photo={photo} onSelect={handleSelectPhoto} />
-              </div>
+          <div className="viewer-gallery-grid">
+            {currentPhotos.map(photo => (
+              <PhotoCard key={photo.id || photo.uri} photo={photo} onSelect={handleSelectPhoto} />
             ))}
           </div>
         )}
@@ -486,6 +528,8 @@ const thumb = fixImageUrl(photo.uri || photo.uri_full)
         className="w-100 h-100"
         style={{ objectFit: 'cover' }}
         draggable={false}
+        onContextMenu={(e) => e.preventDefault()}
+        onDragStart={(e) => e.preventDefault()}
       />
       <div className="viewer-photo-hint">
         <i className="bi bi-printer me-1" /> Imprimir
