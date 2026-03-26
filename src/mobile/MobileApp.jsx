@@ -73,6 +73,15 @@ export default function MobileApp() {
   const [toast, setToast] = useState(null)               // Mensaje de toast
 
   // ============================================
+  // FUNCIÓN PARA OBTENER URL DE IMAGEN CON PROXY
+  // ============================================
+  const getImageUrl = (url) => {
+    if (!url) return ''
+    // Reemplazar el dominio original por el proxy de imágenes
+    return url.replace('https://gestion.printboxweb.com', '/proxy-image')
+  }
+
+  // ============================================
   // EFECTOS DE INICIALIZACIÓN
   // ============================================
 
@@ -372,8 +381,9 @@ export default function MobileApp() {
     try {
       // Enviar fotos de la galería seleccionadas
       for (const photo of selected) {
-        // Convertir URL de la foto a base64
-        const resp = await fetch(photo.uri_full || photo.uri)
+        // Convertir URL de la foto a base64 usando la URL proxy
+        const proxyUrl = getImageUrl(photo.uri_full || photo.uri)
+        const resp = await fetch(proxyUrl)
         const blob = await resp.blob()
         const base64 = await new Promise(res => {
           const reader = new FileReader()
@@ -519,7 +529,7 @@ export default function MobileApp() {
                 className={`mobile-photo-card ${isSelected(photo) ? 'selected' : ''}`}
                 onClick={() => toggleSelect(photo)}
               >
-                <img src={photo.uri} alt="" loading="lazy" />
+                <img src={getImageUrl(photo.uri)} alt="" loading="lazy" />
                 {isSelected(photo) && (
                   <div className="selected-badge">
                     <i className="bi bi-check" />
@@ -642,7 +652,7 @@ export default function MobileApp() {
           {/* Fotos de galería */}
           {selected.map((photo, i) => (
             <div key={i} className="order-photo-item">
-              <img src={photo.uri} alt="" className="order-photo-thumb" />
+              <img src={getImageUrl(photo.uri)} alt="" className="order-photo-thumb" />
               <div className="order-photo-info">
                 <div className="order-photo-label">Foto del evento</div>
                 <div className="order-copies-selector">
