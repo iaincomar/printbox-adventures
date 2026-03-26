@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import { findEvent, getEventPhotos, printJob, saveConfig } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
@@ -12,10 +13,21 @@ const BACKEND = window.electronAPI?.backendUrl || 'https://printbox.incomar.net'
 function fixImageUrl(url) {
   if (!url) return ''
 
+  // Siempre usar proxy en ambos entornos
+  // IMPORTANTE: Si la URL ya contiene /proxy-image, no duplicarlo
+  if (url.includes('/proxy-image')) {
+    return url
+  }
+
   try {
     const parsed = new URL(url)
+    // Extraer pathname de la URL y construir ruta proxy
     return '/proxy-image' + parsed.pathname
   } catch {
+    // Si no es una URL válida, intentar asumir que es una ruta
+    if (url.startsWith('/')) {
+      return '/proxy-image' + url
+    }
     return url
   }
 }
@@ -33,6 +45,8 @@ export default function ViewerApp() {
   const [lastPage, setLastPage] = useState(1)
   const [printCount, setPrintCount] = useState(0)
   const [error, setError] = useState(null)
+  const [showQR, setShowQR] = useState(false)
+  const [autoplay, setAutoplay] = useState(false)
 
   // --- Estados de modales ---
   const [showEventModal, setShowEventModal] = useState(false)
@@ -120,6 +134,14 @@ export default function ViewerApp() {
 
   useInterval(loadPhotos, uuid ? (config?.timer || 5) * 1000 : null)
 
+  // Autoplay: cambiar página automáticamente cada 5 segundos si está activado
+  useInterval(
+    () => {
+      setCurrentPage(p => p < lastPage ? p + 1 : 1)
+    },
+    autoplay ? 5000 : null
+  )
+
   // ============================================
   // MANEJO DE IMPRESIÓN
   // ============================================
@@ -133,7 +155,11 @@ export default function ViewerApp() {
   async function handlePrint() {
     if (!selectedPhoto || printing) return
 
-    const imageUrl = selectedPhoto.uri?.replace('thumbs_', 'gallery_') || selectedPhoto.uri_full
+    // Usar la URL correcta que el backend puede acceder
+    // Convertir a URL con proxy para que Node.js pueda descargarla
+    const originalUrl = selectedPhoto.uri?.replace('thumbs_', 'gallery_') || selectedPhoto.uri_full
+    const proxyPath = fixImageUrl(originalUrl)
+    const imageUrl = `${BACKEND}${proxyPath}`  // URL absoluta para el backend
     const imageName = imageUrl.split('/').pop()
 
     setPrinting(true)
@@ -310,7 +336,70 @@ export default function ViewerApp() {
 
       <header className="viewer-header">
         {error && <div className="alert alert-danger viewer-error-alert">{error}</div>}
+        
+        {/* Botones de control */}
+        {uuid && (
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            justifyContent: 'center',
+            padding: '10px',
+            flexWrap: 'wrap'
+          }}>
+            <button
+              className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'}`}
+              onClick={() => setAutoplay(!autoplay)}
+              title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (5s por página)'}
+            >
+              <i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />
+              {autoplay ? 'Autoplay ON' : 'Autoplay OFF'}
+            </button>
+            
+            <button
+              className="btn btn-sm btn-outline-info"
+              onClick={() => setShowQR(!showQR)}
+              title="Mostrar QR del evento"
+            >
+              <i className="bi bi-qr-code me-1" />
+              {showQR ? 'Ocultar QR' : 'Mostrar QR'}
+            </button>
+          </div>
+        )}
       </header>
+
+      {/* Modal QR */}
+      {showQR && uuid && (
+        <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }} tabIndex="-1">
+          <div className="modal-dialog modal-dialog-centered">
+            <div className="modal-content bg-dark border border-secondary">
+              <div className="modal-body text-center p-5">
+                <h5 className="text-light mb-4">Escanea para acceder al evento</h5>
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  backgroundColor: 'white',
+                  padding: '15px',
+                  borderRadius: '8px'
+                }}>
+                  <QRCodeSVG
+                    value={`${window.location.origin}/#/mobile?evento=${config?.evento || 'ev-' + uuid}`}
+                    size={300}
+                    level="H"
+                    includeMargin={true}
+                  />
+                </div>
+                <p className="text-warning mt-3 mb-0"><small>Código: <strong>{config?.evento}</strong></small></p>
+                <button
+                  className="btn btn-secondary mt-3"
+                  onClick={() => setShowQR(false)}
+                >
+                  <i className="bi bi-x me-1" /> Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="viewer-gallery">
         {!uuid ? (

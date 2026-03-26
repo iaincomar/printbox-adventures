@@ -77,10 +77,22 @@ export default function MobileApp() {
   // ============================================
   const getImageUrl = (url) => {
     if (!url) return ''
+    
+    // Siempre usar proxy en ambos entornos
+    // IMPORTANTE: Si la URL ya contiene /proxy-image, no duplicarlo
+    if (url.includes('/proxy-image')) {
+      return url
+    }
+    
     try {
       const parsed = new URL(url)
+      // Extraer pathname de la URL y construir ruta proxy
       return '/proxy-image' + parsed.pathname
     } catch {
+      // Si no es una URL válida, intentar asumir que es una ruta
+      if (url.startsWith('/')) {
+        return '/proxy-image' + url
+      }
       return url
     }
   }
@@ -178,7 +190,7 @@ export default function MobileApp() {
   // ============================================
 
   /**
-   * Cargar fotos del evento (carga todas las páginas de una vez)
+   * Cargar solo la página inicial de fotos (sin saturar)
    * @param {string} id - UUID del evento
    * @param {number} p - Página inicial
    */
@@ -189,23 +201,49 @@ export default function MobileApp() {
       setPhotos(data)
       setLastPage(lp)
       setPage(p)
-
-      // Si hay más de una página, cargar todas las páginas restantes
-      if (lp > 1) {
-        const rest = []
-        for (let i = 2; i <= lp; i++) {
-          const { photos: more } = await getEventPhotos(id || uuid, i)
-          rest.push(...more)
-        }
-        setPhotos(prev => [...prev, ...rest])
-        setPage(lp)
-      }
     } catch {
       showToast('Error cargando fotos')
     } finally {
       setLoadingPhotos(false)
     }
   }
+
+  /**
+   * Cargar más fotos cuando el usuario llega al final (infinite scroll)
+   */
+  async function loadMorePhotos() {
+    if (loadingMore || page >= lastPage) return
+    setLoadingMore(true)
+    try {
+      const nextPage = page + 1
+      const { photos: data } = await getEventPhotos(uuid, nextPage)
+      setPhotos(prev => [...prev, ...data])
+      setPage(nextPage)
+    } catch {
+      showToast('Error cargando más fotos')
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
+  /**
+   * Intersection Observer para infinite scroll
+   */
+  useEffect(() => {
+    if (!loaderRef.current || step !== STEP_GALLERY) return
+    
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && !loadingMore && page < lastPage) {
+          loadMorePhotos()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    
+    observer.observe(loaderRef.current)
+    return () => observer.disconnect()
+  }, [page, lastPage, loadingMore, step])
 
   /**
    * Alternar selección de una foto en la galería
@@ -317,11 +355,20 @@ export default function MobileApp() {
   }
 
   /**
-   * Eliminar una foto capturada
-   * @param {number} id - ID único de la foto capturada
+   * Subir una foto directamente sin hacer pedido
+   * @param {Object} photo - Foto capturada { dataUrl, copies, id }
    */
-  function removeCaptured(id) {
-    setCapturedPhotos(prev => prev.filter(p => p.id !== id))
+  async function uploadPhotoDirectly(photo) {
+    setSending(true)
+    try {
+      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1 })
+      showToast(`📄 Foto subida correctamente`)
+      removeCaptured(photo.id)
+    } catch (e) {
+      showToast(`Error: ${e.message}`)
+    } finally {
+      setSending(false)
+    }
   }
 
   // ============================================
@@ -623,13 +670,41 @@ export default function MobileApp() {
 
           {/* Botón para continuar */}
           {capturedPhotos.length > 0 && (
-            <button
-              className="btn btn-warning fw-bold w-100 continue-button"
-              onClick={() => setStep(STEP_ORDER)}
-            >
-              <i className="bi bi-bag-check me-2" />
-              Continuar con {capturedPhotos.length} foto{capturedPhotos.length > 1 ? 's' : ''}
-            </button>
+            <div className="d-flex gap-2 w-100" style={{ flexDirection: 'column' }}>
+              <button
+                className="btn btn-success fw-bold w-100 continue-button"
+                onClick={async () => {
+                  setSending(true)
+                  try {
+                    for (const photo of capturedPhotos) {
+                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1 })
+                    }
+                    showToast(`📸 ${capturedPhotos.length} foto(s) subida(s)`)
+                    setCapturedPhotos([])
+                  } catch (e) {
+                    showToast(`Error: ${e.message}`)
+                  } finally {
+                    setSending(false)
+                  }
+                }}
+                disabled={sending}
+              >
+                {sending ? (
+                  <><span className="spinner-border spinner-border-sm me-2" /> Subiendo...</>
+                ) : (
+                  <><i className="bi bi-cloud-upload me-2" /> Subir fotos directamente</>
+                )}
+              </button>
+              
+              <button
+                className="btn btn-warning fw-bold w-100 continue-button"
+                onClick={() => setStep(STEP_ORDER)}
+                disabled={sending}
+              >
+                <i className="bi bi-bag-check me-2" />
+                Hacer pedido ({capturedPhotos.length} foto{capturedPhotos.length > 1 ? 's' : ''})
+              </button>
+            </div>
           )}
         </div>
 

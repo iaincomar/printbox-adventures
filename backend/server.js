@@ -3,6 +3,7 @@ const cors = require('cors')
 const path = require('path')
 const fs = require('fs-extra')
 const os = require('os')
+const fetch = require('node-fetch')
 
 const printRoutes = require('./routes/print')
 const configRoutes = require('./routes/config')
@@ -62,6 +63,38 @@ app.get('/health', (_req, res) => res.json({ ok: true }))
 app.use('/printbox', printboxRoutes)
 app.use('/print', printRoutes)
 app.use('/config', configRoutes)
+
+// Proxy de imágenes (para evitar CORS)
+app.get('/proxy-image/*', async (req, res) => {
+  try {
+    const imagePath = '/' + req.params[0]
+    const imageUrl = 'http://gestion.printboxweb.com' + imagePath
+
+    console.log(`[proxy-image] Fetching: ${imageUrl}`)
+
+    const response = await fetch(imageUrl, {
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+    })
+
+    if (!response.ok) {
+      console.error(`[proxy-image] Error ${response.status}: ${imageUrl}`)
+      return res.status(response.status).json({ error: 'Imagen no encontrada' })
+    }
+
+    const contentType = response.headers.get('content-type')
+    if (contentType) res.set('Content-Type', contentType)
+
+    res.set('Cache-Control', 'public, max-age=86400')
+    const buffer = await response.buffer()
+    res.send(buffer)
+  } catch (err) {
+    console.error('[proxy-image] Error:', err.message)
+    res.status(500).json({ error: 'Error al obtener imagen' })
+  }
+})
 
 // Fallback para React Router
 app.get('*', (_req, res) => {

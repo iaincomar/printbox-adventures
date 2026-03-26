@@ -20,6 +20,7 @@ Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Pyth
 12. [Dependencias principales](#12-dependencias-principales)
 13. [Mejoras implementadas](#13-mejoras-implementadas)
 14. [Solución de problemas](#14-solución-de-problemas)
+14.1. [Nuevas características (Marzo 2026)](#141-nuevas-características-marzo-2026)
 15. [Pendientes / Ideas de mejora](#15-pendientes--ideas-de-mejora)
 
 ---
@@ -394,6 +395,10 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ App móvil web | `mobile/MobileApp.jsx` | Galería completa, cámara, selección, pedido y precios |
 | ✅ Auto-actualización | `electron/main.js` | Comprueba GitHub Releases al arrancar. Barra amarilla de aviso + instala al cerrar |
 | ✅ Proxy de imágenes | `viewer/ViewerApp.jsx`, `mobile/MobileApp.jsx` | Convierte URLs de imágenes a rutas relativas para evitar CORS |
+| ✅ QR código evento | `viewer/ViewerApp.jsx` | Botón para mostrar QR → escanear acceso directo a app móvil |
+| ✅ Autoplay viewer | `viewer/ViewerApp.jsx` | Botón para cambiar de página automáticamente cada 5 segundos |
+| ✅ Envío fotos móvil directo | `mobile/MobileApp.jsx` | Fotos tomadas con cámara se envían sin costo adicional |
+| ✅ Paginación mobile | `mobile/MobileApp.jsx` | Infinite scroll en galería para evitar saturación del proxy |
 
 ---
 
@@ -428,6 +433,94 @@ Solo funciona en HTTPS. En desarrollo local solo funciona la galería.
 
 **App móvil "evento no encontrado" desde móvil**  
 La IP en `src/shared/api.js` debe ser la IP del PC, no `localhost`. Solo para desarrollo.
+
+---
+
+## 14.1. ✨ Nuevas características (Marzo 2026)
+
+### 🎥 Fotos de cámara en móvil - Sin costo
+
+Cuando el usuario toma fotos con la cámara del móvil desde `/#/mobile`, éstas:
+- **Se envían directamente** al servidor sin necesidad de pago
+- Se combinan con fotos de la galería en el mismo pedido
+- Si hay fotos de cámara solas, se imprimen sin costo adicional
+- Las fotos se capturan en **alta resolución** (redimensionadas a 1400px)
+
+**Flujo:**
+```
+1. Móvil → Toma foto
+2. Foto se almacena en estado local
+3. Usuario ve miniatura (puede eliminar)
+4. Al confirmar pedido → Envía foto automáticamente
+5. Servidor imprime sin pasar por carrito de compra
+```
+
+### 📱 QR código de evento (Viewer)
+
+El **Panel de Control (Viewer)** ahora incluye:
+- **Botón "Mostrar QR"** en el header
+- Genera un QR con la URL completa: `printbox.incomar.net/#/mobile?evento=ev-XXXXXX`
+- Los clientes **escanean con su móvil** y acceden directamente sin escribir código
+- QR se muestra en modal emergente
+
+**Uso:**
+```
+Operador → Botón "Mostrar QR" → Proyecta pantalla
+Cliente → Escanea QR con móvil → App abre automáticamente
+```
+
+### ▶️ Autoplay en Viewer
+
+Para un **efecto de diaporama/carrusel**:
+- **Botón "Autoplay ON/OFF"** en el header del Viewer
+- Cuando está activado → cambia de página cada **5 segundos**
+- Cicla automáticamente: página 1 → 2 → 3 → ... → última → vuelve a 1
+- Perfecto para proyectar fotos en pantalla grande
+
+**Uso:**
+```
+Operador → Botón "Autoplay ON"
+Viewer cambia de página automáticamente
+Operador → Botón "Autoplay OFF" para parar
+```
+
+**Configuración:**
+- Intervalo: **5 segundos** (editable en código: `useInterval` de ViewerApp.jsx)
+- Se pausa si el operador hace click manual en paginación
+
+### 💳 Google Pay (Pendiente - Q2 2026)
+
+**Estado:** Documentado para implementación futura.
+
+Planificado para el **flujo de pago**:
+1. Usuario selecciona fotos (galería + cámara)
+2. App muestra total
+3. Botón **"Pagar con Google Pay"**
+4. Se abre billetera digital
+5. Se confirma pago
+6. Impresión sin operador
+
+**Requisitos:**
+- [Google Pay Web API](https://developers.google.com/pay/api/web)
+- Integración con procesador de pagos (Stripe, Square, etc.)
+- HTTPS obligatorio
+- Mobile-only
+
+**Notas técnicas:**
+```javascript
+// Pseudocódigo (aún no implementado)
+const payWithGooglePay = async (amount) => {
+  const paymentRequest = {
+    apiVersion: 2,
+    apiVersionMinor: 0,
+    allowedPaymentMethods: [...],
+    transactionInfo: { totalPriceStatus: 'FINAL', totalPrice: amount },
+  }
+  const paymentsClient = new window.google.payments.api.PaymentsClient()
+  const response = await paymentsClient.loadPaymentData(paymentRequest)
+  await sendPhoto({ event: uuid, image, times, paymentToken: response.paymentMethodData })
+}
+```
 
 ### 🔧 Corrección de URLs de imágenes (CORS fix)
 
