@@ -7,8 +7,8 @@ import './Viewer.css'
 // URL del backend (desde Electron o localhost)
 const BACKEND = window.electronAPI?.backendUrl || 'https://printbox.incomar.net'
 
-// Contenido de privacidad
-const privacyContent = `
+// Contenido de privacidad por defecto (fallback)
+const defaultPrivacyContent = `
 <div style="text-align:center;">
     <h4><b> Condiciones y políticas de uso </b></h4><br>
 </div>
@@ -81,6 +81,7 @@ export default function ViewerApp() {
 
   // --- Estados de privacidad ---
   const [showPrivacyModal, setShowPrivacyModal] = useState(false)
+  const [privacyContent, setPrivacyContent] = useState('')
   const [showAdminConfig, setShowAdminConfig] = useState(false)
 
   // --- Estados de pago ---
@@ -92,6 +93,12 @@ export default function ViewerApp() {
   // --- Estados del carrito ---
   const [cart, setCart] = useState([])
   const [showCart, setShowCart] = useState(false)
+
+  // --- Estados de impresión ---
+  const [selectedPhoto, setSelectedPhoto] = useState(null)
+  const [copies, setCopies] = useState(1)
+  const [printing, setPrinting] = useState(false)
+  const [printDone, setPrintDone] = useState(false)
 
   // ============================================
   // EFECTOS DE INICIALIZACIÓN
@@ -114,6 +121,17 @@ export default function ViewerApp() {
       setTimeout(() => inputRef.current?.focus(), 50)
     }
   }, [showEventModal])
+
+  // Cargar contenido de privacidad al montar
+  useEffect(() => {
+    fetch('/assets/terms_and_conditions_2.html')
+      .then(response => response.text())
+      .then(html => setPrivacyContent(html))
+      .catch(error => {
+        console.error('Error cargando términos:', error)
+        setPrivacyContent(defaultPrivacyContent)
+      })
+  }, [])
 
   // ============================================
   // MANEJO DEL EVENTO
@@ -374,7 +392,7 @@ export default function ViewerApp() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark border border-secondary event-modal">
               <div className="modal-body text-center p-4 p-md-5">
-                <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-modal-logo" />
+                <img src="/assets/ic_launcher.png" alt="Logo" className="event-modal-logo" />
                 <h4 className="event-modal-title">Introduce el código de evento</h4>
                 <p className="event-modal-subtitle">Introduce el número del evento</p>
 
@@ -412,7 +430,7 @@ export default function ViewerApp() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark border border-secondary event-modal">
               <div className="modal-body text-center p-4 p-md-5">
-                <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-modal-logo" />
+                <img src="/assets/ic_launcher.png" alt="Logo" className="event-modal-logo" />
                 <h4 className="event-modal-title">Panel de Administración</h4>
                 <p className="event-modal-subtitle">Introduce la contraseña</p>
 
@@ -686,67 +704,67 @@ export default function ViewerApp() {
 
       <header className="viewer-header">
         {error && <div className="alert alert-danger viewer-error-alert">{error}</div>}
-        
-        {/* Botones de control */}
-        {uuid && (
-          <div style={{
-            display: 'flex',
-            gap: '10px',
-            justifyContent: 'center',
-            padding: '10px',
-            flexWrap: 'wrap'
-          }}>
-            <button
-              className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'} bg-dark border-success`}
-              onClick={() => setAutoplay(!autoplay)}
-              title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (5s por página)'}
-            >
-              <i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />
-              {autoplay ? 'Autoplay ON' : 'Autoplay OFF'}
-            </button>
-            
-            <button
-              className="btn btn-sm btn-outline-info bg-dark border-info"
-              onClick={() => setShowQR(!showQR)}
-              title="Mostrar QR del evento"
-            >
-              <i className="bi bi-qr-code me-1" />
-              {showQR ? 'Ocultar QR' : 'Mostrar QR'}
-            </button>
-
-            {/* Botón de privacidad */}
-            <button
-              className="btn btn-sm btn-outline-light bg-dark border-light"
-              onClick={() => setShowPrivacyModal(true)}
-              title="Política de privacidad"
-            >
-              <i className="bi bi-info-circle me-1" />
-              Privacidad
-            </button>
-
-            {/* Botón de admin */}
-            <button
-              className="btn btn-sm btn-outline-warning bg-dark border-warning"
-              onClick={() => setShowAdminModal(true)}
-              title="Panel de administración"
-            >
-              <i className="bi bi-gear me-1" />
-              Admin
-            </button>
-
-            {/* Botón de actualización manual */}
-            <button
-              className="btn btn-sm btn-outline-primary bg-dark border-primary"
-              onClick={() => loadAllPhotos()}
-              disabled={loading}
-              title="Actualizar fotos (traer nuevas)"
-            >
-              <i className={`bi ${loading ? 'bi-hourglass-split spin' : 'bi-arrow-repeat'} me-1`} />
-              {loading ? 'Cargando...' : 'Actualizar'}
-            </button>
-          </div>
-        )}
       </header>
+
+      {/* Botones de control */}
+      {uuid && (
+        <div style={{
+          display: 'flex',
+          gap: '10px',
+          justifyContent: 'center',
+          padding: '10px',
+          flexWrap: 'wrap'
+        }}>
+          <button
+            className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'} bg-dark border-success`}
+            onClick={() => setAutoplay(!autoplay)}
+            title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (5s por página)'}
+          >
+            <i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />
+            {autoplay ? 'Autoplay ON' : 'Autoplay OFF'}
+          </button>
+          
+          <button
+            className="btn btn-sm btn-outline-info bg-dark border-info"
+            onClick={() => setShowQR(!showQR)}
+            title="Mostrar QR del evento"
+          >
+            <i className="bi bi-qr-code me-1" />
+            {showQR ? 'Ocultar QR' : 'Mostrar QR'}
+          </button>
+
+          {/* Botón de privacidad */}
+          <button
+            className="btn btn-sm btn-outline-light bg-dark border-light"
+            onClick={() => setShowPrivacyModal(true)}
+            title="Política de privacidad"
+          >
+            <i className="bi bi-info-circle me-1" />
+            Privacidad
+          </button>
+
+          {/* Botón de admin */}
+          <button
+            className="btn btn-sm btn-outline-warning bg-dark border-warning"
+            onClick={() => setShowAdminModal(true)}
+            title="Panel de administración"
+          >
+            <i className="bi bi-gear me-1" />
+            Admin
+          </button>
+
+          {/* Botón de actualización manual */}
+          <button
+            className="btn btn-sm btn-outline-primary bg-dark border-primary"
+            onClick={() => loadAllPhotos()}
+            disabled={loading}
+            title="Actualizar fotos (traer nuevas)"
+          >
+            <i className={`bi ${loading ? 'bi-hourglass-split spin' : 'bi-arrow-repeat'} me-1`} />
+            {loading ? 'Cargando...' : 'Actualizar'}
+          </button>
+        </div>
+      )}
 
       {/* Modal QR */}
       {showQR && uuid && (
@@ -847,9 +865,6 @@ export default function ViewerApp() {
             <span className="company-name"><i className="bi bi-camera me-1" />{textos.empresa}</span>
           )}
           <span className="print-count"><i className="bi bi-printer me-1" /><span className="print-count-number">{printCount}</span> impresiones</span>
-          <button className="btn btn-warning change-event-btn" onClick={() => { setEventInput(''); setEventError(''); setShowEventModal(true) }}>
-            <i className="bi bi-pencil me-1" /> Cambiar evento
-          </button>
         </div>
       </footer>
     </div>

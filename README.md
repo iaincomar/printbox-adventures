@@ -10,6 +10,7 @@ Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Pyth
 2. [Requisitos](#2-requisitos)
 3. [Instalación y arranque](#3-instalación-y-arranque)
 4. [Compilar instalador .exe](#4-compilar-instalador-exe)
+4.1. [Despliegue automático con GitHub Actions](#41-despliegue-automático-con-github-actions)
 5. [Estructura del proyecto](#5-estructura-del-proyecto)
 6. [Cómo funciona la aplicación](#6-cómo-funciona-la-aplicación)
 7. [App móvil web](#7-app-móvil-web)
@@ -120,6 +121,28 @@ C:\Users\[usuario]\AppData\Local\PrintboxAdventures\
 ```
 
 > ⚠️ Si hay versión anterior instalada, desinstalar primero desde "Agregar o quitar programas".
+
+---
+
+## 4.1. Despliegue automático con GitHub Actions
+
+### Configuración inicial
+1. Ir a tu repositorio en GitHub → **Settings** → **Secrets and variables** → **Actions**
+2. Crear nuevo secreto llamado `GH_TOKEN` con tu token personal de GitHub
+   > **⚠️ Importante**: Nunca incluyas tokens reales en el código o documentación
+
+### Cómo funciona
+- **Push a `main/master`**: Se ejecuta automáticamente el build y se crea un release draft
+- **Publicar release**: Los archivos del instalador se suben como assets del release
+- **Tag automático**: Se crea un tag con el número de versión (ej: `v1.0.6`)
+
+### Archivos generados en cada release
+- `PrintboxAdventures Setup X.X.X.exe` - Instalador para Windows
+- `latest.yml` - Información de actualización automática
+- `PrintboxAdventures-X.X.X-x64.nsis.7z` - Archivo comprimido
+
+### Verificar workflow
+Después de hacer push, ve a **Actions** en GitHub para ver el progreso del build.
 
 ---
 

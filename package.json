@@ -47,15 +47,15 @@
       "repo": "printbox-adventures"
     },
     "win": {
-      "icon": "src/public/MoscaPrintbox.ico",
+      "icon": "src/public/assets/ic_launcher.ico",
       "target": "nsis"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "src/public/MoscaPrintbox.ico",
-      "uninstallerIcon": "src/public/MoscaPrintbox.ico",
-      "installerHeaderIcon": "src/public/MoscaPrintbox.ico"
+      "installerIcon": "src/public/assets/ic_launcher.ico",
+      "uninstallerIcon": "src/public/assets/ic_launcher.ico",
+      "installerHeaderIcon": "src/public/assets/ic_launcher.ico"
     },
     "files": [
       "dist/**/*",
