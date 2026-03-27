@@ -90,8 +90,8 @@ http://localhost:4000/health  →  { "ok": true }
 ## 4. Compilar instalador .exe
 
 ### Preparación (solo la primera vez)
-- Convertir `MoscaPrintbox.png` a `.ico` en https://convertio.co/png-ico/
-- Guardar en `src/public/MoscaPrintbox.ico`
+- Convertir `ic_launcher.png` a `.ico` en https://convertio.co/png-ico/ (o usar `src/public/assets/ic_launcher.ico` existente)
+- Guardar en `src/public/assets/ic_launcher.ico`
 
 ### Compilar
 ```bash
@@ -167,11 +167,12 @@ printbox-adventures/
 │   ├── main.jsx         React Router — /printer /viewer /mobile
 │   ├── public/
 │   │   ├── favicon.png
-│   │   ├── MoscaPrintbox.ico    (generar desde PNG para el .exe)
+│   │   ├── ic_launcher.ico    (usar para el .exe)
 │   │   └── assets/
 │   │       ├── banners-AdventureSup.png
 │   │       ├── qr-code.png
-│   │       └── MoscaPrintbox.png
+│   │       ├── ic_launcher.png
+│   │       └── MoscaPrintbox.png (opcional, ya no en uso directo)
 │   ├── styles/global.css
 │   ├── shared/
 │   │   ├── api.js              Todas las llamadas HTTP centralizadas
@@ -428,6 +429,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ Prevención descarga imágenes | `viewer/ViewerApp.jsx`, `mobile/MobileApp.jsx` | Bloquea click derecho, drag-drop y descarga en todas las imágenes (Marzo 2026) |
 | ✅ Prevención capturas pantalla | `electron/main.js`, `mobile/Mobile.css` | Bloquea Print Screen en Electron + desactiva selección en web (Marzo 2026) |
 | ✅ Persistencia localStorage | `mobile/MobileApp.jsx` | Guarda selecciones y pedido entre recargas de página (Marzo 2026) |
+| ✅ Persistencia localStorage (viewer) | `viewer/ViewerApp.jsx` | Guarda evento, config, paging y texto entre recargas (Marzo 2026) |
 | ✅ Entrada automática QR | `mobile/MobileApp.jsx` | No muestra modal de entrada, va directamente a galería desde QR (Marzo 2026) |
 | ✅ Pantalla carga QR | `mobile/MobileApp.jsx` | "Cargando evento..." amigable al acceder vía QR (Marzo 2026) |
 | ✅ Flujo simplificado mobile | `mobile/MobileApp.jsx` | Botón editar removido, sin "Hacer foto nueva", texto bilingüe (Marzo 2026) |

@@ -101,19 +101,73 @@ export default function ViewerApp() {
   const [printDone, setPrintDone] = useState(false)
 
   // ============================================
+  // LOCALSTORAGE
+  // ============================================
+
+  const saveViewerState = () => {
+    try {
+      const data = {
+        config,
+        textos,
+        currentPage,
+        lastPage,
+        printCount,
+      }
+      localStorage.setItem('printbox_viewer_state', JSON.stringify(data))
+    } catch (e) {
+      console.error('Error guardando en localStorage:', e)
+    }
+  }
+
+  const loadViewerState = () => {
+    try {
+      const saved = localStorage.getItem('printbox_viewer_state')
+      if (!saved) return null
+      const parsed = JSON.parse(saved)
+
+      if (parsed.config) setConfig(parsed.config)
+      if (parsed.textos) setTextos(parsed.textos)
+      if (parsed.currentPage) setCurrentPage(parsed.currentPage)
+      if (parsed.lastPage) setLastPage(parsed.lastPage)
+      if (parsed.printCount) setPrintCount(parsed.printCount)
+
+      if (parsed.config?.evento) {
+        setShowEventModal(false)
+      }
+
+      return parsed
+    } catch (e) {
+      console.error('Error cargando de localStorage:', e)
+      return null
+    }
+  }
+
+  // ============================================
   // EFECTOS DE INICIALIZACIÓN
   // ============================================
 
   useEffect(() => {
+    const saved = loadViewerState()
+
     Promise.all([
       fetch(`${BACKEND}/config`).then(r => r.json()),
       fetch(`${BACKEND}/print/count`).then(r => r.json()).catch(() => ({ count: 0 })),
     ]).then(([d, c]) => {
-      if (d.config) setConfig(d.config)
-      if (d.textos) setTextos(d.textos)
+      const mergedConfig = { ...(d.config || {}), ...(saved?.config || {}) }
+      const mergedTextos = { ...(d.textos || {}), ...(saved?.textos || {}) }
+
+      setConfig(mergedConfig)
+      setTextos(mergedTextos)
       setPrintCount(c.count || 0)
-      setShowEventModal(true)
-    }).catch(() => setShowEventModal(true))
+
+      if (!mergedConfig.evento) {
+        setShowEventModal(true)
+      } else {
+        setShowEventModal(false)
+      }
+    }).catch(() => {
+      if (!saved?.config?.evento) setShowEventModal(true)
+    })
   }, [])
 
   useEffect(() => {
@@ -132,6 +186,10 @@ export default function ViewerApp() {
         setPrivacyContent(defaultPrivacyContent)
       })
   }, [])
+
+  useEffect(() => {
+    saveViewerState()
+  }, [config, textos, currentPage, lastPage, printCount])
 
   // ============================================
   // MANEJO DEL EVENTO
