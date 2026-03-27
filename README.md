@@ -289,9 +289,9 @@ El código se rellena automáticamente al escanear.
 ### `config/servidor_api.txt`
 ```
 servidor;https://gestion.printboxweb.com
-evento;ev-1668042
+evento;ev-
 timer;5
-impresora;Adobe PDF
+impresora;-IMPRESORA-
 delay;5
 ```
 > ⚠️ Orden exacto — no cambiar posición de líneas
@@ -506,7 +506,7 @@ La IP en `src/shared/api.js` debe ser la IP del PC, no `localhost`. Solo para de
 
 ## 14.1. ✨ Nuevas características (Marzo 2026)
 
-### � Mejoras UI/UX
+### Mejoras UI/UX
 
 #### Botones con Fondo en Viewer
 - **QR y Autoplay:** Ahora tienen fondo oscuro con borde de color para mejor visibilidad
