@@ -156,7 +156,7 @@ export default function PrinterApp() {
    * Abrir modal para cambiar evento
    */
   function handleStartClick() {
-    setEventInput(config.evento?.replace('ev-', '') || '')
+    setEventInput((config.evento_printer || config.evento)?.replace('ev-', '') || '')
     setEventError('')
     setShowEventModal(true)
   }
@@ -174,10 +174,10 @@ export default function PrinterApp() {
     setEventError('')
     setShowEventModal(false)
 
-    const newConfig = { ...config, evento: fullCode }
+    const newConfig = { ...config, evento_printer: fullCode }
     setConfig(newConfig)
     await saveConfig(newConfig, textos)
-    addLog(`✓ Evento configurado: ${fullCode}`, 'success')
+    addLog(`✓ Evento de impresora configurado: ${fullCode}`, 'success')
   }
 
   /**
@@ -197,13 +197,14 @@ export default function PrinterApp() {
    * Iniciar el programa de impresión
    */
   async function handleStart() {
-    if (!config.evento) {
+    const eventToUse = config.evento_printer || config.evento
+    if (!eventToUse) {
       handleStartClick()
       return
     }
-    addLog(`Conectando con evento ${config.evento}...`)
+    addLog(`Conectando con evento ${eventToUse}...`)
     try {
-      const eventUuid = await findEvent(config.evento)
+      const eventUuid = await findEvent(eventToUse)
       setUuid(eventUuid)
       setRunning(true)
       setElapsed(0)
@@ -232,7 +233,8 @@ export default function PrinterApp() {
    * Intentar reconectar a la API automáticamente
    */
   async function tryReconnect() {
-    if (reconnecting || !config.evento) return
+    const eventToUse = config.evento_printer || config.evento
+    if (reconnecting || !eventToUse) return
 
     setReconnecting(true)
     reconnectAttemptsRef.current += 1
@@ -240,12 +242,12 @@ export default function PrinterApp() {
     addLog(`↻ Intentando reconectar... (intento ${attempt})`, 'warn')
 
     try {
-      const newUuid = await findEvent(config.evento)
+      const newUuid = await findEvent(eventToUse)
       setUuid(newUuid)
       setApiStatus('ok')
       setReconnecting(false)
       reconnectAttemptsRef.current = 0
-      addLog(`✓ Reconectado al evento ${config.evento}`, 'success')
+      addLog(`✓ Reconectado al evento ${eventToUse}`, 'success')
     } catch {
       setReconnecting(false)
       const delay = Math.min(30, attempt * 5)
@@ -315,7 +317,7 @@ export default function PrinterApp() {
       setUuid(null)
       tryReconnect()
     }
-  }, [uuid, printedImages, config.impresora, config.delay, config.evento])
+  }, [uuid, printedImages, config.impresora, config.delay, config.evento, config.evento_printer])
 
   /**
    * Intervalo de verificación de fotos (cada X segundos)
@@ -437,10 +439,10 @@ export default function PrinterApp() {
         </div>
 
         <div className="d-flex align-items-center gap-3 ms-auto">
-          {config.evento && (
+          {(config.evento_printer || config.evento) && (
             <span className="badge border border-warning text-warning printer-event-badge">
               <i className="bi bi-calendar-event" />
-              {config.evento}
+              {config.evento_printer || config.evento}
               <button
                 className="btn btn-link p-0 text-warning printer-event-edit"
                 onClick={handleStartClick}

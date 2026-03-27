@@ -487,6 +487,30 @@ body {
   background: #198754;
 }
 
+.step-number {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #333;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 12px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.step-number.active {
+  background: #f7c604;
+  color: #000;
+}
+
+.step-number.done {
+  background: #198754;
+  color: #fff;
+}
+
 /* ========== TOAST NOTIFICATIONS ========== */
 .mobile-toast {
   position: fixed;

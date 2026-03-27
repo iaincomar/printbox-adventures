@@ -16,7 +16,7 @@ router.get('/', (req, res) => {
     const apiFile = path.join(CONFIG_DIR, 'servidor_api.txt')
     const textosFile = path.join(CONFIG_DIR, 'textos.txt')
 
-    const config = { servidor: 'http://gestion.printboxweb.com', evento: '', timer: 5, impresora: '', delay: 5 }
+    const config = { servidor: 'http://gestion.printboxweb.com', evento: '', evento_printer: '', timer: 5, impresora: '', delay: 5 }
     const textos = { text_es: '', text_en: '', text_fr: '', text_de: '', precio1: '', precio2: '', precio3: '', empresa: '' }
 
     if (fs.existsSync(apiFile)) {
@@ -25,9 +25,10 @@ router.get('/', (req, res) => {
         const val = line.includes(';') ? line.split(';')[1]?.trim() : line.trim()
         if (i === 0 && val) config.servidor = val
         if (i === 1 && val) config.evento = val
-        if (i === 2 && val) config.timer = parseInt(val) || 5
-        if (i === 3 && val) config.impresora = val
-        if (i === 4 && val) config.delay = parseInt(val) || 5
+        if (i === 2 && val) config.evento_printer = val
+        if (i === 3 && val) config.timer = parseInt(val) || 5
+        if (i === 4 && val) config.impresora = val
+        if (i === 5 && val) config.delay = parseInt(val) || 5
       })
     }
 
@@ -56,6 +57,7 @@ router.post('/', (req, res) => {
       const lines = [
         `servidor;${config.servidor || 'https://gestion.printboxweb.com'}`,
         `evento;${config.evento || ''}`,
+        `evento_printer;${config.evento_printer || ''}`,
         `timer;${config.timer || 5}`,
         `impresora;${config.impresora || ''}`,
         `delay;${config.delay || 5}`,

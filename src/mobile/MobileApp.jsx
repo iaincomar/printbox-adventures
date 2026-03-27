@@ -531,20 +531,22 @@ export default function MobileApp() {
   // ============================================
 
   /**
-   * Indicador visual de progreso (puntos)
+   * Indicador visual de progreso (números)
    */
-  const StepDots = () => (
+  const StepNumbers = () => (
     <div className="d-flex justify-content-center gap-2 py-2">
-      {[STEP_GALLERY, STEP_CAMERA, STEP_ORDER].map(s => (
+      {[STEP_GALLERY, STEP_CAMERA, STEP_ORDER].map((s, index) => (
         <div
           key={s}
-          className={`step-dot ${
+          className={`step-number ${
             step === s ? 'active' : (
               [STEP_ORDER, STEP_SUCCESS].includes(step) && s !== STEP_ORDER ? 'done' :
               step === STEP_ORDER && s === STEP_CAMERA ? 'done' : ''
             )
           }`}
-        />
+        >
+          {index + 1}
+        </div>
       ))}
     </div>
   )
@@ -628,7 +630,7 @@ export default function MobileApp() {
           </div>
         </div>
 
-        <StepDots />
+        <StepNumbers />
 
         {/* Grid de fotos */}
         {loadingPhotos ? (
@@ -699,7 +701,7 @@ export default function MobileApp() {
           </button>
         </div>
 
-        <StepDots />
+        <StepNumbers />
 
         <div className="camera-container">
           {/* Preview de cámara */}
@@ -788,7 +790,7 @@ export default function MobileApp() {
           <span className="fw-bold" style={{ color: '#f7c604' }}>Tu pedido</span>
         </div>
 
-        <StepDots />
+        <StepNumbers />
 
         <div className="order-summary-container">
           {/* Fotos de galería */}
