@@ -2,6 +2,8 @@
 
 Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Python + tkinter a **React + Electron + Node.js Express**, con app web móvil incluida.
 
+**Versión actual:** 1.0.6
+
 ---
 
 ## Índice
@@ -28,15 +30,24 @@ Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Pyth
 
 ## 1. Descripción general
 
-PrintboxAdventures se compone de **tres pantallas**:
+PrintboxAdventures se compone de **dos interfaces públicas en web** y **una app de escritorio**:
 
-| Pantalla | Ruta | Quién la usa |
+### Interfaces web (públicas)
+
+| Pantalla | Ruta | Uso |
 |---|---|---|
-| Panel de Control | `/#/printer` | Operador del evento |
-| Visor de Evento | `/#/viewer` | Pantalla pública en el evento |
-| App Móvil | `/#/mobile` | Cliente desde su móvil |
+| Visor de Evento | `/#/viewer` | Proyección de fotos en pantalla pública del evento |
+| App Móvil | `/#/mobile` | Cliente escanea QR desde su móvil para ver/comprar fotos |
+
+### App de escritorio (Electron)
+
+| Aplicación | Acceso | Uso |
+|---|---|---|
+| Panel de Control | Solo Electron | Operador del evento (sin acceso web) |
 
 Se conecta a la API de Printbox en `https://gestion.printboxweb.com` (servidor Laravel).
+
+> ⚠️ **Nota:** El Panel de Control (`/#/printer`) es **solo accesible desde la app de Electron**, no desde navegador web.
 
 ---
 
@@ -73,17 +84,18 @@ Lanza 3 procesos:
 - `[BACKEND]` — Express en `http://localhost:4000`
 - `[ELECTRON]` — Abre las ventanas de escritorio
 
-### Verificar backend
+### Verificar backend en desarrollo y producción
 ```
-http://localhost:4000/health  →  { "ok": true }
+Desarrollo:  http://localhost:4000/health  →  { "ok": true }
+Producción:  https://printbox.incomar.net/health  →  { "ok": true }
 ```
 
-### Probar app móvil desde el móvil (mismo WiFi)
-1. Añadir `host: true` en `vite.config.js` → `server: { port: 3000, host: true }`
-2. Cambiar en `src/shared/api.js` → `'http://192.168.X.X:4000'` con la IP del PC
-3. Abrir en el móvil → `http://192.168.X.X:3000/#/mobile`
+### Probar app móvil desde el móvil en desarrollo (mismo WiFi)
+1. Descubrir tu IP local: `ipconfig` (Windows) → busca `IPv4 Address: 192.168.X.X`
+2. Cambiar en `src/shared/api.js` → `const BACKEND_URL = 'http://192.168.X.X:4000'`
+3. Abrir desde móvil → `http://192.168.X.X:3000/#/mobile`
 
-> ⚠️ La cámara solo funciona en HTTPS (producción). En desarrollo local solo funciona la galería.
+> ⚠️ La cámara del móvil solo funciona en **HTTPS** (producción en https://printbox.incomar.net). En desarrollo local solo funciona la galería.
 
 ---
 
@@ -200,9 +212,11 @@ printbox-adventures/
 
 ## 6. Cómo funciona la aplicación
 
-### 6.1 Panel de Control — `/#/printer`
+### 6.1 Panel de Control — Aplicación Electron (no web)
 
-1. Abrir la app → aparece el Panel de Control
+**⚠️ Nota:** El Panel de Control **NO es accesible vía web**. Solo está disponible en la app de Electron para Windows.
+
+1. Abrir la app Electron → aparece el Panel de Control
 2. **Editar** para configurar delay, timer, impresora y textos del Viewer
 3. **▶ Encender** → introduce el código del evento (solo números, sin `ev-`)
 4. El programa detecta fotos nuevas → descarga → PDF → imprime
@@ -212,16 +226,20 @@ printbox-adventures/
 **Alertas automáticas:**
 - 🔴 Barra roja si la impresora no se encuentra (comprueba cada 30s)
 - 🟡 Barra amarilla si la API cae (reconecta automáticamente)
+- 🟡 Barra amarilla si hay actualización disponible (se instala al cerrar)
 
 ### 6.2 Visor de Evento — `/#/viewer`
+
+**Accesible vía web pública** en `https://printbox.incomar.net/#/viewer`
 
 1. Siempre pide el código de evento al arrancar
 2. Galería responsive de fotos
 3. Click en foto → modal con foto grande + selector de copias (1/2/3)
-4. Confirmar → se imprime
-5. Paginación automática
+4. Confirmar → se imprime (si hay un Panel de Control Electron activo)
+5. Paginación automática (10 fotos por página)
 
 **Elementos:**
+- Header: Botones QR y Autoplay
 - Header: imagen banner fija 90px (textos pintados en la imagen)
 - Footer Bootstrap: precios, empresa, contador, botón "Cambiar evento"
 
@@ -229,7 +247,9 @@ printbox-adventures/
 
 ## 7. App móvil web
 
-Accesible en `/#/mobile`. Pensada para que el cliente la use desde su móvil.
+Accesible vía web pública en `https://printbox.incomar.net/#/mobile`
+
+**Pensada para que el cliente la use desde su móvil o tablet.**
 
 ### Flujo del cliente
 
@@ -310,34 +330,47 @@ Para reemplazar: sustituir el archivo con el mismo nombre → `npm run build`.
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | React 18 + Vite 7 + Bootstrap 5.3.8 CDN dark mode |
+| Frontend | React 18 + Vite 7 + Bootstrap 5.3.8 CDN dark mode + React Router |
+| API HTTP | Fetch API (nativa) |
 | Backend | Node.js + Express 4 (puerto 4000) |
 | Desktop | Electron 40 |
 | Build | electron-builder 26 → NSIS installer |
 
-### CORS
-El renderer no puede llamar directamente a `gestion.printboxweb.com`.
+### CORS y Proxy
+En desarrollo, las llamadas pasan por el backend local:
 ```
 React → localhost:4000/printbox/... → gestion.printboxweb.com
 ```
 
+En producción (`printbox.incomar.net`), Express también maneja el proxy de CORS.
+
 ### CSRF (error 419)
 Laravel protege sus POST con tokens CSRF. El backend visita `/sanctum/csrf-cookie`, guarda la cookie en un `CookieJar` (`tough-cookie` + `fetch-cookie`) y la envía en `X-XSRF-TOKEN`.
 
-### Impresión física
-1. Descarga imagen → `AppData\descargas\`
-2. Detecta orientación con Sharp
-3. Genera PDF A4 centrado con PDFKit → `AppData\pdf\`
-4. Espera Delay segundos
-5. Envía a impresora con pdf-to-printer (SumatraPDF embebido)
-6. Incrementa contador en `PBAcount.txt`
+### Impresión física (Panel de Control en Electron)
+1. Lee fotos de la API en tiempo real
+2. Descarga imagen → `AppData\descargas\`
+3. Detecta orientación con Sharp
+4. Genera PDF A4 centrado con PDFKit → `AppData\pdf\`
+5. Espera Delay segundos (configurable)
+6. Envía a impresora con pdf-to-printer (SumatraPDF embebido)
+7. Incrementa contador en `PBAcount.txt`
 
-### Carga del frontend
+### Carga del frontend en Electron
+
+**Desarrollo:**
 ```
-DEV:  Electron → loadURL('http://localhost:3000')  ← Vite
-PROD: Electron → loadURL('http://localhost:4000')  ← Express sirve dist/
+Electron → loadURL('http://localhost:3000')  ← Vite dev server (solo frontend)
+Express en puerto 4000 maneja APIs
 ```
-> `loadFile()` rompe las rutas `/assets/` — por eso se usa Express en producción.
+
+**Producción:**
+```
+Electron → loadURL('http://localhost:4000')  ← Express sirve dist/ (frontend compilado)
+Express también maneja APIs de backend
+```
+
+> Se usa `loadURL()` en ambos casos para mantener consistencia con rutas `/assets/`.
 
 ### Datos en producción
 ```
@@ -752,7 +785,7 @@ Las actualizaciones se publican en **GitHub Releases** y los usuarios las recibe
 
 1. Incrementa la versión en `package.json`:
 ```json
-"version": "1.0.1"
+"version": "1.0.7"
 ```
 
 2. Haz commit y push:
@@ -768,7 +801,7 @@ $env:GH_TOKEN="tu_token_aqui"
 npm run build
 ```
 
-4. Ve a https://github.com/iaincomar/printbox-adventures/releases y pulsa **"Publish release"** en el borrador.
+4. Ve a tu repositorio en GitHub → **Releases** y pulsa **"Publish release"** en el borrador.
 
 ### Qué ven los usuarios
 - Al arrancar la app comprueba automáticamente si hay versión nueva en GitHub
@@ -779,10 +812,6 @@ npm run build
 
 ---
 
-## Contacto API Printbox
-
-**Email:** eventos@printboxweb.com · **Teléfono:** 623 040 445
-
 ---
 
-*PrintboxAdventures v1.0.0 · Desarrollado por Alejandro · 2026*
+*PrintboxAdventures v1.0.6 · Desarrollado por Alejandro · 2026*
