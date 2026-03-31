@@ -98,3 +98,4 @@ export async function sendPhoto({ event, image, times = 1 }) {
   if (!res.ok) throw new Error(data?.error?.message || data?.message || 'Error al enviar foto')
   return data
 }
+

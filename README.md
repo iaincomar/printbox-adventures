@@ -36,8 +36,8 @@ PrintboxAdventures se compone de **dos interfaces públicas en web** y **una app
 
 | Pantalla | Ruta | Uso |
 |---|---|---|
-| Visor de Evento | `/#/viewer` | Proyección de fotos en pantalla pública del evento |
-| App Móvil | `/#/mobile` | Cliente escanea QR desde su móvil para ver/comprar fotos |
+| Visor de Evento | `/viewer` | Proyección de fotos en pantalla pública del evento |
+| App Móvil | `/mobile` | Cliente escanea QR desde su móvil para ver/comprar fotos |
 
 ### App de escritorio (Electron)
 
@@ -47,7 +47,7 @@ PrintboxAdventures se compone de **dos interfaces públicas en web** y **una app
 
 Se conecta a la API de Printbox en `https://gestion.printboxweb.com` (servidor Laravel).
 
-> ⚠️ **Nota:** El Panel de Control (`/#/printer`) es **solo accesible desde la app de Electron**, no desde navegador web.
+> ⚠️ **Nota:** El Panel de Control (`/printer`) es **solo accesible desde la app de Electron**, no desde navegador web.
 
 ---
 
@@ -155,6 +155,91 @@ C:\Users\[usuario]\AppData\Local\PrintboxAdventures\
 
 ### Verificar workflow
 Después de hacer push, ve a **Actions** en GitHub para ver el progreso del build.
+
+---
+
+## 4.2. Despliegue web en IONOS (Apache)
+
+La versión web está desplegada en **https://printbox.incomar.net** usando Apache compartido de IONOS.
+Como IONOS no permite Node.js, el backend Express se reemplaza con un **proxy PHP**.
+
+### Archivos necesarios en IONOS (raíz del subdominio)
+
+```
+/  (raíz de printbox.incomar.net)
+├── index.html          ← del dist/
+├── assets/             ← del dist/
+├── proxy.php           ← reemplaza el backend Express
+├── .htaccess           ← enruta las llamadas API al proxy
+└── config/             ← carpeta con permisos de escritura (chmod 755)
+    ├── servidor_api.txt
+    └── textos.txt
+```
+
+### Pasos para actualizar la web
+
+1. Hacer el build:
+```bash
+npm run build
+```
+
+2. Subir via FTP a la raíz del subdominio:
+   - Todo el contenido de `dist/`
+   - `proxy.php`
+   - `.htaccess`
+   - Carpeta `config/` (solo si no existe ya)
+
+> ⚠️ No sobreescribir `config/` si ya tiene datos configurados.
+
+### `.htaccess`
+
+```apache
+Options -MultiViews
+RewriteEngine On
+RewriteBase /
+
+RewriteRule ^health$           proxy.php [L,QSA]
+RewriteRule ^config/?$         proxy.php [L,QSA]
+RewriteRule ^print/.*$         proxy.php [L,QSA]
+RewriteRule ^printbox/.*$      proxy.php [L,QSA]
+RewriteRule ^proxy-image/.*$   proxy.php [L,QSA]
+
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [L]
+```
+
+### `proxy.php`
+
+El `proxy.php` reemplaza completamente el backend Express en producción web:
+- Gestiona CSRF automáticamente (CookieJar en PHP)
+- Proxea todas las llamadas a `gestion.printboxweb.com` usando HTTPS
+- Lee/escribe los archivos de configuración en `config/`
+- Proxea las imágenes en `/proxy-image/` para evitar mixed content
+
+### `vite.config.js` para web
+
+```js
+base: '/',  // El subdominio apunta directo a la raíz
+```
+
+### `src/shared/api.js` para web
+
+```js
+const BACKEND_URL =
+  typeof window !== 'undefined' && window.electronAPI?.backendUrl
+    ? window.electronAPI.backendUrl
+    : ''  // Rutas relativas → proxy.php en Apache
+```
+
+### Diagnóstico
+
+```
+https://printbox.incomar.net/proxy.php  →  { "status": "ok", "curl": true, ... }
+https://printbox.incomar.net/health     →  { "ok": true }
+https://printbox.incomar.net/config     →  { "config": {...}, "textos": {...} }
+```
+
 
 ---
 
@@ -531,6 +616,22 @@ La IP en `src/shared/api.js` debe ser la IP del PC, no `localhost`. Solo para de
 #### Cambio Viewer
 - **Título modal evento:** "Introduce el código de evento" (más claro que "¿Cuál es el evento?")
 
+#### Mejoras de Rendimiento
+- **Cache inteligente de fotos:** El viewer guarda las fotos en localStorage por 15 minutos
+- **Carga instantánea al recargar:** No vuelve a descargar todas las fotos si ya están en caché
+- **Actualización automática de precios:** Los cambios en admin se reflejan en tiempo real en la UI
+
+#### Mejoras de Layout
+- **Grid responsive mejorado:** Máximo 5-6 columnas en pantallas anchas (antes se estiraba a 8+)
+- **Header móvil rediseñado:** Logo + texto bilingüe + botón privacidad
+- **Ocultar indicadores de paso:** Los "1 2 3" ya no aparecen sobre las fotos
+
+#### Optimizaciones Técnicas
+- **URLs limpias:** Migración completa de HashRouter a BrowserRouter
+- **API unificada:** Rutas relativas que funcionan en desarrollo y producción
+- **Gestión de estado mejorada:** localStorage persistente para configuración móvil
+- **Actualización en tiempo real:** Los precios y configuraciones del admin se sincronizan automáticamente con la UI
+
 ---
 
 ### 🔒 Seguridad & Privacidad
@@ -766,7 +867,7 @@ const getImageUrl = (url) => {
 - [x] Entrada automática desde QR ✅ Marzo 2026
 - [x] Prevención de descarga de imágenes ✅ Marzo 2026
 - [x] Texto bilingüe (español/inglés) ✅ Marzo 2026
-- [ ] Despliegue en IONOS con HTTPS (necesario para la cámara)
+- [x] Despliegue en IONOS con HTTPS ✅ Marzo 2026 → https://printbox.incomar.net
 - [ ] PWA manifest para instalar en pantalla de inicio
 
 ### Técnicas

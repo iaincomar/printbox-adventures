@@ -78,13 +78,13 @@ export default function MobileApp() {
   // ============================================
   const getImageUrl = (url) => {
     if (!url) return ''
-    
+
     // Siempre usar proxy en ambos entornos
     // IMPORTANTE: Si la URL ya contiene /proxy-image, no duplicarlo
     if (url.includes('/proxy-image')) {
       return url
     }
-    
+
     try {
       const parsed = new URL(url)
       // Extraer pathname de la URL y construir ruta proxy
@@ -177,7 +177,7 @@ export default function MobileApp() {
     // Leer evento de la URL PRIMERO (ahora con BrowserRouter es window.location.search)
     const params = new URLSearchParams(window.location.search)
     const ev = params.get('evento')
-    
+
     if (ev) {
       // QR: NO cargar del localStorage, empezar limpio
       const code = ev.replace('ev-', '')
@@ -204,7 +204,7 @@ export default function MobileApp() {
 
     getConfig().then(d => {
       if (d.textos) setTextos(d.textos)
-    }).catch(() => {})
+    }).catch(() => { })
   }, [])
 
   /**
@@ -249,7 +249,7 @@ export default function MobileApp() {
       const id = await findEvent(`ev-${eventCodeToUse}`)
       setUuid(id)
       uuidRef.current = id
-      
+
       // Intentar cargar fotos, pero no bloquear si falla
       try {
         await loadPhotos(id, 1)
@@ -258,7 +258,7 @@ export default function MobileApp() {
         // Continuar aunque no carguen fotos
         setPhotos([])
       }
-      
+
       setStep(STEP_GALLERY)
       setLoadingFromQR(false)
     } catch (e) {
@@ -318,7 +318,7 @@ export default function MobileApp() {
    */
   useEffect(() => {
     if (!loaderRef.current || step !== STEP_GALLERY) return
-    
+
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && !loadingMore && page < lastPage) {
@@ -327,7 +327,7 @@ export default function MobileApp() {
       },
       { threshold: 0.1 }
     )
-    
+
     observer.observe(loaderRef.current)
     return () => observer.disconnect()
   }, [page, lastPage, loadingMore, step])
@@ -565,12 +565,11 @@ export default function MobileApp() {
       {[STEP_GALLERY, STEP_CAMERA, STEP_ORDER].map((s, index) => (
         <div
           key={s}
-          className={`step-number ${
-            step === s ? 'active' : (
-              [STEP_ORDER, STEP_SUCCESS].includes(step) && s !== STEP_ORDER ? 'done' :
+          className={`step-number ${step === s ? 'active' : (
+            [STEP_ORDER, STEP_SUCCESS].includes(step) && s !== STEP_ORDER ? 'done' :
               step === STEP_ORDER && s === STEP_CAMERA ? 'done' : ''
-            )
-          }`}
+          )
+            }`}
         >
           {index + 1}
         </div>
@@ -582,6 +581,18 @@ export default function MobileApp() {
   const renderStepNumbers = () => {
     return null
   }
+
+  const procesarPago = async () => {
+    const payments = window.Square.payments(APP_ID, LOCATION_ID);
+    const card = await payments.card();
+    await card.attach('#card-container');
+
+    const result = await card.tokenize();
+    if (result.status === 'OK') {
+      // Enviar el token (result.token) al proxy.php
+      enviarAlBackend(result.token);
+    }
+  };
 
   // ============================================
   // RENDER POR PASO
@@ -794,7 +805,7 @@ export default function MobileApp() {
                   <><i className="bi bi-cloud-upload me-2" /> Subir fotos directamente</>
                 )}
               </button>
-              
+
               <button
                 className="btn btn-warning fw-bold w-100 continue-button"
                 onClick={() => setStep(STEP_ORDER)}
@@ -838,9 +849,8 @@ export default function MobileApp() {
                   {[1, 2, 3].map(n => (
                     <button
                       key={n}
-                      className={`btn btn-sm order-copies-btn ${
-                        photo.copies === n ? 'order-copies-btn-active' : 'order-copies-btn-inactive'
-                      }`}
+                      className={`btn btn-sm order-copies-btn ${photo.copies === n ? 'order-copies-btn-active' : 'order-copies-btn-inactive'
+                        }`}
                       onClick={() => updateCopies(photo.uri, n)}
                     >
                       {n}
@@ -869,9 +879,8 @@ export default function MobileApp() {
                   {[1, 2, 3].map(n => (
                     <button
                       key={n}
-                      className={`btn btn-sm order-copies-btn ${
-                        photo.copies === n ? 'order-copies-btn-active' : 'order-copies-btn-inactive'
-                      }`}
+                      className={`btn btn-sm order-copies-btn ${photo.copies === n ? 'order-copies-btn-active' : 'order-copies-btn-inactive'
+                        }`}
                       onClick={() => updateCapturedCopies(photo.id, n)}
                     >
                       {n}
@@ -886,7 +895,20 @@ export default function MobileApp() {
               >
                 <i className="bi bi-trash" />
               </button>
+              // Insertar en la sección de "Resumen de Pedido"
+              <div id="square-payment-section" className="p-3 bg-dark border rounded mt-3">
+                <h6 className="text-white text-center mb-3">Finalizar Pago Seguro</h6>
+                {/* Botones de Apple Pay / Google Pay */}
+                <div id="google-pay-button"></div>
+                <div className="text-muted text-center my-2 small">— o tarjeta —</div>
+                {/* Formulario de tarjeta de Square */}
+                <div id="card-container"></div>
+                <button id="card-button" className="btn btn-warning w-100 mt-3 fw-bold">
+                  PAGAR {totalPedido}€
+                </button>
+              </div>
             </div>
+
           ))}
 
           {/* Total del pedido */}
@@ -963,6 +985,5 @@ export default function MobileApp() {
       </div>
     )
   }
-
   return null
 }

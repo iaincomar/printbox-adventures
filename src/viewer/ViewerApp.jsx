@@ -5,7 +5,7 @@ import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
 // URL del backend (desde Electron o localhost)
-const BACKEND = window.electronAPI?.backendUrl || 'https://printbox.incomar.net'
+const BACKEND = window.electronAPI?.backendUrl || (window.location.hostname === 'localhost' ? 'http://localhost:4000' : '/')
 
 // Contenido de privacidad por defecto (fallback)
 const defaultPrivacyContent = `
@@ -235,17 +235,29 @@ export default function ViewerApp() {
 
   async function handleSaveAdminConfig() {
     const newConfig = { ...config, evento: `ev-${adminEventCode}`, evento_printer: `ev-${adminPrinterEventCode}` }
-    const newTextos = { 
-      ...textos, 
-      precio1: adminPrice1, 
-      precio2: adminPrice2, 
-      precio3: adminPrice3 
+    const newTextos = {
+      ...textos,
+      precio1: adminPrice1,
+      precio2: adminPrice2,
+      precio3: adminPrice3
     }
-    
+
     setConfig(newConfig)
     setTextos(newTextos)
     await saveConfig(newConfig, newTextos).catch(() => {})
-    
+
+    // Refrescar configuración desde servidor para asegurar actualización en tiempo real
+    try {
+      const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
+      const freshConfig = await fetch(configUrl).then(r => r.json())
+      const mergedConfig = { ...newConfig, ...freshConfig.config }
+      const mergedTextos = { ...newTextos, ...freshConfig.textos }
+      setConfig(mergedConfig)
+      setTextos(mergedTextos)
+    } catch (e) {
+      console.warn('Error refrescando config:', e.message)
+    }
+
     // Reload event if changed
     if (config?.evento !== newConfig.evento) {
       findEvent(newConfig.evento)

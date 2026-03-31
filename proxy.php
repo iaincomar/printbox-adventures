@@ -254,5 +254,34 @@ if (strpos($uri, '/proxy-image/') === 0) {
     exit();
 }
 
+// Ruta: /proxy.php?route=process-payment
+if ($_GET['route'] === 'process-payment') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    
+    $payload = json_encode([
+        "source_id" => $data['token'],
+        "idempotency_key" => uniqid(),
+        "amount_money" => [
+            "amount" => $data['amount'] * 100, // Euros a céntimos
+            "currency" => "EUR"
+        ],
+        "location_id" => "TU_LOCATION_ID"
+    ]);
+
+    $url = "https://connect.squareupsandbox.com/v2/payments"; // Cambiar a production en vivo
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $ACCESS_TOKEN,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    
+    $response = curl_exec($ch);
+    echo $response;
+    exit;
+}
+
 http_response_code(404);
 echo json_encode(['error' => 'Ruta no encontrada', 'uri' => $uri]);
