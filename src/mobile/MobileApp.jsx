@@ -110,7 +110,8 @@ export default function MobileApp() {
       capturedPhotos,
       uuid,
       page,
-      lastPage
+      lastPage,
+      photos  // Guardar también las fotos de la galería
     }
     localStorage.setItem('printbox_mobile_state', JSON.stringify(data))
   }
@@ -127,6 +128,7 @@ export default function MobileApp() {
         setUuid(parsed.uuid || null)
         setPage(parsed.page || 1)
         setLastPage(parsed.lastPage || 1)
+        setPhotos(parsed.photos || [])  // Restaurar fotos de la galería
         return parsed
       } catch (e) {
         console.error('Error loading from localStorage:', e)
@@ -172,21 +174,32 @@ export default function MobileApp() {
    * Cargar estado desde localStorage y procesar URL
    */
   useEffect(() => {
-    // Cargar desde localStorage
-    const saved = loadFromLocalStorage()
-
-    // Leer evento de la URL
-    const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
+    // Leer evento de la URL PRIMERO (ahora con BrowserRouter es window.location.search)
+    const params = new URLSearchParams(window.location.search)
     const ev = params.get('evento')
+    
     if (ev) {
+      // QR: NO cargar del localStorage, empezar limpio
       const code = ev.replace('ev-', '')
       setEventCode(code)
       setLoadingFromQR(true)
       // Auto-conectar si viene de QR
       setTimeout(() => handleConnectEvent(code), 100)
-    } else if (saved && saved.eventCode && saved.step !== STEP_EVENT) {
-      // Si hay estado guardado y no viene de QR, intentar reconectar
-      setTimeout(() => handleConnectEvent(saved.eventCode), 100)
+    } else {
+      // No viene de QR: cargar desde localStorage
+      const saved = loadFromLocalStorage()
+
+      if (saved && saved.eventCode && saved.step !== STEP_EVENT) {
+        if (saved.photos && saved.photos.length > 0) {
+          // Ya tenemos fotos en localStorage, no forzar recarga inmediata
+          setStep(saved.step || STEP_GALLERY)
+          setUuid(saved.uuid || null)
+          setLoadingFromQR(false)
+        } else {
+          // Si no hay fotos guardadas, reconectar para cargar
+          setTimeout(() => handleConnectEvent(saved.eventCode), 100)
+        }
+      }
     }
 
     getConfig().then(d => {
@@ -199,7 +212,7 @@ export default function MobileApp() {
    */
   useEffect(() => {
     saveToLocalStorage()
-  }, [eventCode, step, selected, capturedPhotos, uuid, page, lastPage])
+  }, [eventCode, step, selected, capturedPhotos, uuid, page, lastPage, photos])
 
   // ============================================
 
@@ -236,10 +249,22 @@ export default function MobileApp() {
       const id = await findEvent(`ev-${eventCodeToUse}`)
       setUuid(id)
       uuidRef.current = id
-      await loadPhotos(id, 1)
+      
+      // Intentar cargar fotos, pero no bloquear si falla
+      try {
+        await loadPhotos(id, 1)
+      } catch (err) {
+        console.error('Error cargando fotos:', err)
+        // Continuar aunque no carguen fotos
+        setPhotos([])
+      }
+      
       setStep(STEP_GALLERY)
+      setLoadingFromQR(false)
     } catch (e) {
+      console.error('Error conectando evento:', e)
       setEventError('Evento no encontrado. Verifica el código.')
+      setLoadingFromQR(false)
     } finally {
       setLoading(false)
     }
@@ -261,8 +286,10 @@ export default function MobileApp() {
       setPhotos(data)
       setLastPage(lp)
       setPage(p)
-    } catch {
+    } catch (err) {
+      console.error('[loadPhotos] Error:', err.message)
       showToast('Error cargando fotos')
+      throw err  // Re-lanzar para que handleConnectEvent lo atrape
     } finally {
       setLoadingPhotos(false)
     }
@@ -551,6 +578,11 @@ export default function MobileApp() {
     </div>
   )
 
+  // Componente para mostrar StepNumbers solo en pasos específicos
+  const renderStepNumbers = () => {
+    return null
+  }
+
   // ============================================
   // RENDER POR PASO
   // ============================================
@@ -560,7 +592,7 @@ export default function MobileApp() {
     if (loadingFromQR) {
       return (
         <div className="mobile-app event-container">
-          <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-logo" />
+          <img src="/assets/ic_launcher.png" alt="Logo" className="event-logo" />
           <h1 className="event-title">PrintboxAdventures</h1>
           <p className="event-subtitle">Cargando evento...</p>
           <div className="d-flex justify-content-center">
@@ -573,7 +605,7 @@ export default function MobileApp() {
 
     return (
       <div className="mobile-app event-container">
-        <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-logo" />
+        <img src="/assets/ic_launcher.png" alt="Logo" className="event-logo" />
         <h1 className="event-title">PrintboxAdventures</h1>
         <p className="event-subtitle">Introduce el código del evento</p>
 
@@ -619,18 +651,20 @@ export default function MobileApp() {
     return (
       <div className="mobile-app">
         {/* Header */}
-        <div className="mobile-header d-flex align-items-center gap-2">
-          <img src="/assets/MoscaPrintbox.png" alt="" className="mobile-header-logo" />
+        <div className="mobile-header d-flex align-items-center gap-3 justify-content-between">
+          <img src="/assets/ic_launcher.png" alt="Logo" className="mobile-header-ic-launcher-large" />
           <div className="flex-grow-1">
             <div className="mobile-header-title">
-              🇪🇸 Elige tus fotos para imprimir<br />
-              🇺🇸 Choose your photos to print
+              🇪🇸 ES Elige tus fotos para imprimir<br />
+              🇬🇧 GB Choose your photos to print
             </div>
-            <div className="mobile-header-subtitle">ev-{eventCode}</div>
           </div>
+          <button className="btn btn-sm btn-outline-warning" title="Información de privacidad" style={{ fontSize: '18px', padding: '2px 6px' }} onClick={() => alert('Tus fotos están protegidas. No se guardan datos personales.')}>
+            <i className="bi bi-info-circle" />
+          </button>
         </div>
 
-        <StepNumbers />
+        {renderStepNumbers()}
 
         {/* Grid de fotos */}
         {loadingPhotos ? (
@@ -701,7 +735,7 @@ export default function MobileApp() {
           </button>
         </div>
 
-        <StepNumbers />
+        {renderStepNumbers()}
 
         <div className="camera-container">
           {/* Preview de cámara */}
@@ -790,7 +824,7 @@ export default function MobileApp() {
           <span className="fw-bold" style={{ color: '#f7c604' }}>Tu pedido</span>
         </div>
 
-        <StepNumbers />
+        {renderStepNumbers()}
 
         <div className="order-summary-container">
           {/* Fotos de galería */}

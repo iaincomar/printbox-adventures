@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react'
 import ReactDOM from 'react-dom/client'
-import { HashRouter, Routes, Route, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom'
 import ViewerApp from './viewer/ViewerApp'
 import PrinterApp from './printer/PrinterApp'
 import MobileApp from './mobile/MobileApp'
@@ -25,7 +25,7 @@ function RedirectByDevice() {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <HashRouter>
+    <BrowserRouter>
       <Routes>
         {/* ruta raíz */}
         <Route path="/" element={<RedirectByDevice />} />
@@ -37,6 +37,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         {/* fallback */}
         <Route path="*" element={<RedirectByDevice />} />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   </React.StrictMode>
 )

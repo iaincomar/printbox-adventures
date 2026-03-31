@@ -1,5 +1,6 @@
 // Detecta si estamos en local (Electron/dev) o en producción (IONOS)
-const BACKEND_URL = 'https://printbox.incomar.net'
+// En desarrollo usamos localhost:4000, en producción rutas relativas para proxy.php
+const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:4000' : ''
 
 // ─── API Printbox ───────────────────────────────────────────────────────────
 

@@ -839,7 +839,7 @@ export default function ViewerApp() {
                   borderRadius: '8px'
                 }}>
                   <QRCodeSVG
-                    value={`${window.location.origin}/#/mobile?evento=${config?.evento || 'ev-' + uuid}`}
+                    value={`${window.location.origin}/mobile?evento=${config?.evento || 'ev-' + uuid}`}
                     size={300}
                     level="H"
                     includeMargin={true}

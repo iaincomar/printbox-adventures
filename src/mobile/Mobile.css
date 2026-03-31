@@ -44,6 +44,14 @@ body {
   border-radius: 6px;
 }
 
+.mobile-header-ic-launcher-large {
+  height: 45px;
+  width: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
 .mobile-header-title {
   font-size: 14px;
   font-weight: bold;
@@ -53,7 +61,16 @@ body {
 
 .mobile-header-subtitle {
   font-size: 11px;
-  color: var(--bs-secondary);
+  color: #aaa;
+  margin-top: 2px;
+}
+
+.mobile-header-ic-launcher {
+  height: 18px;
+  width: auto;
+  margin: 0 6px;
+  vertical-align: middle;
+  border-radius: 3px;
 }
 
 .mobile-header-edit {
@@ -359,18 +376,21 @@ body {
 .order-copies-btn {
   padding: 0 0.5rem;
   font-size: 0.875rem;
+  border: 1px solid transparent !important;
+  transition: all 0.15s ease;
 }
 
 .order-copies-btn-active {
-  background-color: #f7c604;
-  color: #000;
-  font-weight: bold;
+  background-color: #f7c604 !important;
+  color: #000 !important;
+  font-weight: bold !important;
+  border-color: #f7c604 !important;
 }
 
 .order-copies-btn-inactive {
-  background-color: transparent;
-  border-color: var(--bs-secondary);
-  color: var(--bs-light);
+  background-color: transparent !important;
+  border-color: var(--bs-secondary) !important;
+  color: var(--bs-light) !important;
 }
 
 .order-price {
