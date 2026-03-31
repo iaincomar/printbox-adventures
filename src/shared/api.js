@@ -1,6 +1,8 @@
 // Detecta si estamos en local (Electron/dev) o en producción (IONOS)
-// En desarrollo usamos localhost:4000, en producción rutas relativas para proxy.php
-const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:4000' : ''
+// Usamos rutas relativas que funcionan en ambos entornos
+// - En desarrollo: Express sirve desde raíz (/printbox/*, /print/*, etc)
+// - En producción: proxy.php rutea las peticiones correctamente
+const BACKEND_URL = ''
 
 // ─── API Printbox ───────────────────────────────────────────────────────────
 

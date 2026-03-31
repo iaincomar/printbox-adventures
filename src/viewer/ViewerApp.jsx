@@ -274,11 +274,47 @@ export default function ViewerApp() {
   }, [config?.evento])
 
   // ============================================
-  // CARGA DE FOTOS (UNA SOLA VEZ)
+  // CARGA DE FOTOS (UNA SOLA VEZ, con cache localStorage)
   // ============================================
+
+  const viewerCacheKey = uuid ? `viewer_photo_cache_${uuid}` : null
+  const CACHE_TTL = 1000 * 60 * 15 // 15 minutos
 
   const loadAllPhotos = useCallback(async () => {
     if (!uuid) return
+
+    const readCache = () => {
+      if (!viewerCacheKey) return null
+      try {
+        const raw = localStorage.getItem(viewerCacheKey)
+        if (!raw) return null
+        const parsed = JSON.parse(raw)
+        if (!parsed || !parsed.ts || !Array.isArray(parsed.photos)) return null
+        if (Date.now() - parsed.ts > CACHE_TTL) return null
+        return parsed.photos
+      } catch {
+        return null
+      }
+    }
+
+    const writeCache = (data) => {
+      if (!viewerCacheKey) return
+      try {
+        localStorage.setItem(viewerCacheKey, JSON.stringify({ ts: Date.now(), photos: data }))
+      } catch {
+        // ignore
+      }
+    }
+
+    const cachedPhotos = readCache()
+    if (cachedPhotos && Array.isArray(cachedPhotos) && cachedPhotos.length > 0) {
+      setAllPhotos(cachedPhotos)
+      setLastPage(Math.ceil(cachedPhotos.length / 10))
+      setError(null)
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       const allPhotosArray = []
@@ -292,24 +328,29 @@ export default function ViewerApp() {
 
       // Si hay más páginas, cargarlas con un pequeño delay para evitar rate limiting
       for (let p = 2; p <= lastPageNumber; p++) {
-        await new Promise(resolve => setTimeout(resolve, 300)) // 300ms entre páginas
+        await new Promise(resolve => setTimeout(resolve, 300))
         const { photos: more } = await getEventPhotos(uuid, p)
         allPhotosArray.push(...more)
       }
 
       setAllPhotos(allPhotosArray)
-      setLastPage(Math.ceil(allPhotosArray.length / 10)) // 10 fotos por página (5x2)
+      setLastPage(Math.ceil(allPhotosArray.length / 10))
       setError(null)
+      writeCache(allPhotosArray)
     } catch (e) {
       setError(`Error al cargar fotos: ${e.message}`)
+      setAllPhotos([])
     } finally {
       setLoading(false)
     }
-  }, [uuid])
+  }, [uuid, viewerCacheKey])
 
   // Cargar fotos cuando se conecta el evento
   useEffect(() => {
-    loadAllPhotos()
+    loadAllPhotos().catch((e) => {
+      console.error('Error loadAllPhotos:', e)
+      setError(`Error al cargar fotos: ${e?.message || e}`)
+    })
   }, [loadAllPhotos])
 
   // ============================================
