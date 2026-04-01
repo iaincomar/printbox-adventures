@@ -109,6 +109,13 @@ if ($uri === '/health') {
 
 // ── /config GET ──
 if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    
+    // Limpiar caché para asegurar lectura fresca del disco
+    clearstatcache(true);
+    
     $configDir = __DIR__ . '/config';
     $config = [
         'servidor'  => 'http://gestion.printboxweb.com',
@@ -134,9 +141,22 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     if (file_exists($textosFile)) {
         $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         $keys  = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
-        foreach ($lines as $i => $line) {
-            $val = trim(strpos($line, ':') !== false ? substr($line, strpos($line,':')+1) : $line);
-            if (isset($keys[$i])) $textos[$keys[$i]] = $val;
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (strpos($line, ':') !== false) {
+                $parts = explode(':', $line, 2);
+                $key = trim($parts[0]);
+                $val = trim($parts[1] ?? '');
+            } else {
+                $key = '';
+                $val = $line;
+            }
+            
+            // Mapear por nombre de clave en lugar de índice
+            if (in_array($key, $keys)) {
+                $textos[$key] = $val;
+            }
         }
     }
 
@@ -149,30 +169,130 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $configDir = __DIR__ . '/config';
     if (!is_dir($configDir)) mkdir($configDir, 0755, true);
 
+    $writeErrors = [];
+
     if (isset($data['config'])) {
         $c = $data['config'];
-        file_put_contents($configDir . '/servidor_api.txt', implode("\n", [
+        $success = file_put_contents($configDir . '/servidor_api.txt', implode("\n", [
             'servidor;' . ($c['servidor'] ?? 'http://gestion.printboxweb.com'),
             'evento;'   . ($c['evento']    ?? ''),
             'timer;'    . ($c['timer']     ?? 5),
             'impresora;'. ($c['impresora'] ?? ''),
             'delay;'    . ($c['delay']     ?? 5),
         ]));
+        if ($success === false) $writeErrors[] = 'No se pudo escribir servidor_api.txt';
     }
     if (isset($data['textos'])) {
         $t = $data['textos'];
-        file_put_contents($configDir . '/textos.txt', implode("\n", [
-            'es:'      . ($t['text_es'] ?? ''),
-            'en:'      . ($t['text_en'] ?? ''),
-            'fr:'      . ($t['text_fr'] ?? ''),
-            'de:'      . ($t['text_de'] ?? ''),
-            'precio1:' . ($t['precio1'] ?? ''),
-            'precio2:' . ($t['precio2'] ?? ''),
-            'precio3:' . ($t['precio3'] ?? ''),
-            'empresa:' . ($t['empresa'] ?? ''),
-        ]));
+        $textosFile = $configDir . '/textos.txt';
+        
+        // Leer valores existentes para preservarlos
+        $existingTextos = [
+            'text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '',
+            'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => ''
+        ];
+        if (file_exists($textosFile)) {
+            $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (strpos($line, ':') !== false) {
+                    $parts = explode(':', $line, 2);
+                    $key = trim($parts[0]);
+                    $val = trim($parts[1] ?? '');
+                    if (in_array($key, ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'])) {
+                        $existingTextos[$key] = $val;
+                    }
+                }
+            }
+        }
+        
+        // Mezclar nuevos valores con existentes (los nuevos prevalecen si no están vacíos)
+        $finalTextos = [
+            'text_es' => ($t['text_es'] !== '' && isset($t['text_es'])) ? $t['text_es'] : $existingTextos['text_es'],
+            'text_en' => ($t['text_en'] !== '' && isset($t['text_en'])) ? $t['text_en'] : $existingTextos['text_en'],
+            'text_fr' => ($t['text_fr'] !== '' && isset($t['text_fr'])) ? $t['text_fr'] : $existingTextos['text_fr'],
+            'text_de' => ($t['text_de'] !== '' && isset($t['text_de'])) ? $t['text_de'] : $existingTextos['text_de'],
+            'precio1' => ($t['precio1'] !== '' && isset($t['precio1'])) ? $t['precio1'] : $existingTextos['precio1'],
+            'precio2' => ($t['precio2'] !== '' && isset($t['precio2'])) ? $t['precio2'] : $existingTextos['precio2'],
+            'precio3' => ($t['precio3'] !== '' && isset($t['precio3'])) ? $t['precio3'] : $existingTextos['precio3'],
+            'empresa' => ($t['empresa'] !== '' && isset($t['empresa'])) ? $t['empresa'] : $existingTextos['empresa'],
+        ];
+        
+        $content = implode("\n", [
+            'es:' . $finalTextos['text_es'],
+            'en:' . $finalTextos['text_en'],
+            'fr:' . $finalTextos['text_fr'],
+            'de:' . $finalTextos['text_de'],
+            'precio1:' . $finalTextos['precio1'],
+            'precio2:' . $finalTextos['precio2'],
+            'precio3:' . $finalTextos['precio3'],
+            'empresa:' . $finalTextos['empresa'],
+        ]);
+        $success = file_put_contents($textosFile, $content, LOCK_EX);
+        if ($success === false) $writeErrors[] = 'No se pudo escribir textos.txt';
+        else {
+            // Forzar que el file system sincronice
+            @fsync(fopen($textosFile, 'r'));
+        }
     }
-    echo json_encode(['ok' => true]);
+
+    if (count($writeErrors) > 0) {
+        http_response_code(500);
+        echo json_encode(['ok' => false, 'errors' => $writeErrors]);
+        exit();
+    }
+
+    // Limpiar caché de PHP antes de releer
+    clearstatcache(true, $configDir . '/servidor_api.txt');
+    clearstatcache(true, $configDir . '/textos.txt');
+
+    // Leer y devolver los valores actualizados inmediatamente
+    $config = ['servidor' => 'http://gestion.printboxweb.com', 'evento' => '', 'timer' => 5, 'impresora' => '', 'delay' => 5];
+    $textos = ['text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '', 'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => ''];
+
+    $apiFile = $configDir . '/servidor_api.txt';
+    if (file_exists($apiFile)) {
+        $lines = file($apiFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines) {
+            $keys = ['servidor', 'evento', 'timer', 'impresora', 'delay'];
+            foreach ($lines as $i => $line) {
+                if (!isset($keys[$i])) break;
+                $val = trim(strpos($line, ';') !== false ? explode(';', $line, 2)[1] : $line);
+                $key = $keys[$i];
+                if (in_array($key, ['timer', 'delay'])) {
+                    $config[$key] = (int) $val;
+                } else {
+                    $config[$key] = $val;
+                }
+            }
+        }
+    }
+
+    $textosFile = $configDir . '/textos.txt';
+    if (file_exists($textosFile)) {
+        $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        if ($lines) {
+            $keys = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (strpos($line, ':') !== false) {
+                    $parts = explode(':', $line, 2);
+                    $key = trim($parts[0]);
+                    $val = trim($parts[1] ?? '');
+                } else {
+                    $key = '';
+                    $val = $line;
+                }
+                
+                // Mapear por nombre de clave
+                if (in_array($key, $keys)) {
+                    $textos[$key] = $val;
+                }
+            }
+        }
+    }
+
+    echo json_encode(['ok' => true, 'config' => $config, 'textos' => $textos]);
     exit();
 }
 
@@ -258,8 +378,8 @@ if (strpos($uri, '/proxy-image/') === 0) {
 if ($_GET['route'] === 'process-payment') {
     $data = json_decode(file_get_contents('php://input'), true);
 
-    $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'sandbox-sq0atb-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
-    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LPMZR4EC495TD';
+    $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
+    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
 
     $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
     $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;

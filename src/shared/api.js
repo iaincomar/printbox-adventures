@@ -1,7 +1,7 @@
 // Detecta si estamos en local (Electron/dev) o en producción (IONOS)
-// En desarrollo: http://localhost:4000
+// En desarrollo: http://localhost:4000 para mobile, https://printbox.incomar.net para viewer
 // En producción: rutas relativas para proxy.php
-const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:4000' : ''
+const BACKEND_URL = window.location.hostname === 'localhost' ? (window.isViewer ? 'https://printbox.incomar.net' : 'http://localhost:4000') : ''
 
 // ─── API Printbox ───────────────────────────────────────────────────────────
 
@@ -74,17 +74,21 @@ export async function printJob({ imageUrl, imageName, printer, delay = 5 }) {
 }
 
 export async function getConfig() {
-  const res = await fetch(`${BACKEND_URL}/config`)
-  return res.json()
+  const url = `${BACKEND_URL}/config`
+  const res = await fetch(url)
+  const data = await res.json()
+  return data
 }
 
 export async function saveConfig(config, textos) {
-  const res = await fetch(`${BACKEND_URL}/config`, {
+  const url = `${BACKEND_URL}/config`
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ config, textos }),
   })
-  return res.json()
+  const data = await res.json()
+  return data
 }
 
 export async function processPayment({ token, amount, currency = 'EUR', location_id }) {

@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { findEvent, getEventPhotos, sendPhoto, getConfig, processPayment } from '../shared/api'
+import { useInterval } from '../shared/hooks/useInterval'
 import './Mobile.css'
+
+window.isMobile = true
 
 // ============================================
 // UTILIDADES
@@ -83,6 +86,20 @@ export default function MobileApp() {
   const [squareError, setSquareError] = useState('')     // Error de Square
   const [squareLoading, setSquareLoading] = useState(false) // Pago Square en progreso
 
+  const applyTextos = (incoming) => {
+    if (!incoming) return
+    setTextos(prev => ({
+      precio1: (incoming.precio1 && incoming.precio1.trim()) || (prev?.precio1 && prev.precio1.trim()) || '5',
+      precio2: (incoming.precio2 && incoming.precio2.trim()) || (prev?.precio2 && prev.precio2.trim()) || '9',
+      precio3: (incoming.precio3 && incoming.precio3.trim()) || (prev?.precio3 && prev.precio3.trim()) || '12',
+      text_es: incoming.text_es || prev?.text_es || '',
+      text_en: incoming.text_en || prev?.text_en || '',
+      text_fr: incoming.text_fr || prev?.text_fr || '',
+      text_de: incoming.text_de || prev?.text_de || '',
+      empresa: incoming.empresa || prev?.empresa || ''
+    }))
+  }
+
   // ============================================
   // FUNCIÓN PARA OBTENER URL DE IMAGEN CON PROXY
   // ============================================
@@ -121,7 +138,8 @@ export default function MobileApp() {
       uuid,
       page,
       lastPage,
-      photos  // Guardar también las fotos de la galería
+      photos, // Guardar también las fotos de la galería
+      textos,
     }
     localStorage.setItem('printbox_mobile_state', JSON.stringify(data))
   }
@@ -139,6 +157,9 @@ export default function MobileApp() {
         setPage(parsed.page || 1)
         setLastPage(parsed.lastPage || 1)
         setPhotos(parsed.photos || [])  // Restaurar fotos de la galería
+        if (parsed.textos) {
+          setTextos(parsed.textos)
+        }
         return parsed
       } catch (e) {
         console.error('Error loading from localStorage:', e)
@@ -213,24 +234,17 @@ export default function MobileApp() {
     }
 
     getConfig().then(d => {
-      if (d.textos) setTextos(d.textos)
+      if (d.textos) applyTextos(d.textos)
     }).catch(() => { })
   }, [])
 
-  // Refrescar precios del config cada 10 segundos (síntesis con admin)
+  // Refrescar precios del config cada 5 segundos (síntesis con admin)
   useEffect(() => {
     const interval = setInterval(() => {
       getConfig().then(d => {
-        if (d.textos) {
-          setTextos({
-            precio1: d.textos.precio1 || '5',
-            precio2: d.textos.precio2 || '9',
-            precio3: d.textos.precio3 || '12',
-            ...d.textos
-          })
-        }
+        if (d.textos) applyTextos(d.textos)
       }).catch(() => {})
-    }, 10000)
+    }, 5000)
     return () => clearInterval(interval)
   }, [])
 
@@ -297,14 +311,7 @@ export default function MobileApp() {
   useEffect(() => {
     if (uuid || step === STEP_ORDER) {
       getConfig().then(d => {
-        if (d.textos) {
-          setTextos({
-            precio1: d.textos?.precio1 || '5',
-            precio2: d.textos?.precio2 || '9',
-            precio3: d.textos?.precio3 || '12',
-            ...d.textos
-          })
-        }
+        if (d.textos) applyTextos(d.textos)
       }).catch(() => { })
     }
   }, [uuid, step])
@@ -705,6 +712,17 @@ export default function MobileApp() {
   }
 
   // ============================================
+  // INTERVALO PARA ACTUALIZAR PRECIOS
+  // ============================================
+  useInterval(() => {
+    getConfig().then(d => {
+      if (d.textos) applyTextos(d.textos)
+    }).catch(err => {
+      console.error('Error actualizando precios:', err)
+    })
+  }, 5000) // Cada 5 segundos
+
+  // ============================================
   // RENDER POR PASO
   // ============================================
 
@@ -776,8 +794,8 @@ export default function MobileApp() {
           <img src="/assets/ic_launcher.png" alt="Logo" className="mobile-header-ic-launcher-large" />
           <div className="flex-grow-1">
             <div className="mobile-header-title">
-              🇪🇸 ES Elige tus fotos para imprimir<br />
-              🇬🇧 GB Choose your photos to print
+              🇪🇸 Elige tus fotos para imprimir<br />
+              🇬🇧 Choose your photos to print
             </div>
           </div>
           <button className="btn btn-sm btn-outline-warning" title="Información de privacidad" style={{ fontSize: '18px', padding: '2px 6px' }} onClick={() => alert('Tus fotos están protegidas. No se guardan datos personales.')}>

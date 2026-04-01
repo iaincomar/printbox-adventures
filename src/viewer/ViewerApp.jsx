@@ -4,6 +4,8 @@ import { findEvent, getEventPhotos, printJob, saveConfig, sendPhoto } from '../s
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
+window.isViewer = true
+
 // URL del backend (desde Electron o localhost)
 const BACKEND = window.electronAPI?.backendUrl || (window.location.hostname === 'localhost' ? 'http://localhost:4000' : '/')
 
@@ -310,85 +312,62 @@ export default function ViewerApp() {
   const viewerCacheKey = uuid ? `viewer_photo_cache_${uuid}` : null
   const CACHE_TTL = 1000 * 60 * 15 // 15 minutos
 
-  const loadAllPhotos = useCallback(async () => {
+  const loadAllPhotos = useCallback(async (localPage = 1) => {
     if (!uuid) return
-
-    const readCache = () => {
-      if (!viewerCacheKey) return null
-      try {
-        const raw = localStorage.getItem(viewerCacheKey)
-        if (!raw) return null
-        const parsed = JSON.parse(raw)
-        if (!parsed || !parsed.ts || !Array.isArray(parsed.photos)) return null
-        if (Date.now() - parsed.ts > CACHE_TTL) return null
-        return parsed.photos
-      } catch {
-        return null
-      }
-    }
-
-    const writeCache = (data) => {
-      if (!viewerCacheKey) return
-      try {
-        localStorage.setItem(viewerCacheKey, JSON.stringify({ ts: Date.now(), photos: data }))
-      } catch {
-        // ignore
-      }
-    }
-
-    const cachedPhotos = readCache()
-    if (cachedPhotos && Array.isArray(cachedPhotos) && cachedPhotos.length > 0) {
-      setAllPhotos(cachedPhotos)
-      setLastPage(Math.ceil(cachedPhotos.length / 100))
-      setError(null)
-      setLoading(false)
-      return
-    }
 
     try {
       setLoading(true)
-      const allPhotosArray = []
-      let page = 1
-      let lastPageNumber = 1
 
-      // Cargar primera página para saber el total
-      const { photos: p1, lastPage: lp1 } = await getEventPhotos(uuid, page)
-      allPhotosArray.push(...p1)
-      lastPageNumber = lp1
+      // Cargar 20 fotos por “página local” (2 páginas remotas de 10 cada una). 
+      const remoteStart = (localPage - 1) * 2 + 1
+      let resultPhotos = []
+      let remoteLastPage = 1
+      let remotePerPage = 10
 
-      // Si hay más páginas, cargarlas con un pequeño delay para evitar rate limiting
-      for (let p = 2; p <= lastPageNumber; p++) {
-        await new Promise(resolve => setTimeout(resolve, 300))
-        const { photos: more } = await getEventPhotos(uuid, p)
-        allPhotosArray.push(...more)
+      for (let offset = 0; offset < 2; offset++) {
+        const remotePage = remoteStart + offset
+        const { photos: data = [], lastPage: lp } = await getEventPhotos(uuid, remotePage)
+        remoteLastPage = lp || remoteLastPage
+        if (data.length > 0) {
+          resultPhotos.push(...data)
+          remotePerPage = data.length
+        }
+        if (remotePage >= remoteLastPage) break
       }
 
-      setAllPhotos(allPhotosArray)
-      setLastPage(Math.ceil(allPhotosArray.length / 100))
+      // Si aun no llegan a 20 y hay más páginas remotas, intentar traer uno más.
+      if (resultPhotos.length < 20 && remoteStart + 2 <= remoteLastPage) {
+        const { photos: extra = [] } = await getEventPhotos(uuid, remoteStart + 2)
+        resultPhotos.push(...extra)
+      }
+
+      setAllPhotos(resultPhotos.slice(0, 20))
+
+      const calculatedLast = Math.max(1, Math.ceil((remoteLastPage * (remotePerPage || 10)) / 20))
+      setLastPage(calculatedLast)
       setError(null)
-      writeCache(allPhotosArray)
     } catch (e) {
       setError(`Error al cargar fotos: ${e.message}`)
       setAllPhotos([])
     } finally {
       setLoading(false)
     }
-  }, [uuid, viewerCacheKey])
+  }, [uuid])
 
-  // Cargar fotos cuando se conecta el evento
+  // Cargar fotos cuando se conecta el evento o cambia página
   useEffect(() => {
-    loadAllPhotos().catch((e) => {
+    loadAllPhotos(currentPage).catch((e) => {
       console.error('Error loadAllPhotos:', e)
       setError(`Error al cargar fotos: ${e?.message || e}`)
     })
-  }, [loadAllPhotos])
+  }, [loadAllPhotos, currentPage])
 
   // ============================================
   // PAGINACIÓN
   // ============================================
 
-  // Calcular fotos para la página actual (100 por página - suficiente para cualquier pantalla)
-  const currentPhotos = allPhotos.slice((currentPage - 1) * 100, currentPage * 100)
+  // Fotos para la página actual (20 por página)
+  const currentPhotos = allPhotos
 
   // Autoplay: cambiar página automáticamente cada 5 segundos si está activado
   useInterval(
@@ -885,7 +864,7 @@ export default function ViewerApp() {
           {/* Botón de actualización manual */}
           <button
             className="btn btn-sm btn-outline-primary bg-dark border-primary"
-            onClick={() => loadAllPhotos()}
+            onClick={() => loadAllPhotos(currentPage)}
             disabled={loading}
             title="Actualizar fotos (traer nuevas)"
           >
@@ -1019,6 +998,7 @@ function PhotoCard({ photo, onSelect }) {
         draggable={false}
         onContextMenu={(e) => e.preventDefault()}
         onDragStart={(e) => e.preventDefault()}
+        onError={(e) => e.target.style.display = 'none'}
       />
       <div className="viewer-photo-hint">
         <i className="bi bi-printer me-1" /> Imprimir

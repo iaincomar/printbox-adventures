@@ -13,6 +13,10 @@ function RedirectByDevice() {
   useEffect(() => {
     const isMobile = /Mobi|Android|iPhone/i.test(navigator.userAgent)
 
+    // Configurar variables globales para api.js
+    window.isMobile = isMobile
+    window.isViewer = !isMobile
+
     if (isMobile) {
       navigate('/mobile', { replace: true })
     } else {

@@ -70,6 +70,8 @@ router.post('/photos', async (req, res) => {
     const data = await r.json()
     console.log(`[printbox] photos page=${page} → ${r.status}`)
     if (!r.ok) return res.status(r.status).json({ error: data })
+    // Limit to 20 photos per page
+    if (data.data) data.data = data.data.slice(0, 20)
     res.json(data)
   } catch (err) {
     console.error('[printbox] photos error:', err.message)

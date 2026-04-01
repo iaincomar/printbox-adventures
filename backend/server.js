@@ -69,8 +69,8 @@ app.post('/process-payment', async (req, res) => {
       return res.status(400).json({ error: 'Token y amount son requeridos' })
     }
 
-    const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN || 'sandbox-sq0atb-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
-    const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID || 'LPMZR4EC495TD'
+    const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN || 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8'
+    const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID || 'LHB32XGQK68GX'
 
     const payload = {
       source_id: token,
