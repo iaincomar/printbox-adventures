@@ -1,8 +1,7 @@
 // Detecta si estamos en local (Electron/dev) o en producción (IONOS)
-// Usamos rutas relativas que funcionan en ambos entornos
-// - En desarrollo: Express sirve desde raíz (/printbox/*, /print/*, etc)
-// - En producción: proxy.php rutea las peticiones correctamente
-const BACKEND_URL = ''
+// En desarrollo: http://localhost:4000
+// En producción: rutas relativas para proxy.php
+const BACKEND_URL = window.location.hostname === 'localhost' ? 'http://localhost:4000' : ''
 
 // ─── API Printbox ───────────────────────────────────────────────────────────
 
@@ -86,6 +85,20 @@ export async function saveConfig(config, textos) {
     body: JSON.stringify({ config, textos }),
   })
   return res.json()
+}
+
+export async function processPayment({ token, amount, currency = 'EUR', location_id }) {
+  const url = `${BACKEND_URL || ''}/process-payment`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, amount, currency, location_id }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    throw new Error(data?.errors?.[0]?.detail || data?.error || JSON.stringify(data))
+  }
+  return data
 }
 
 export async function sendPhoto({ event, image, times = 1 }) {

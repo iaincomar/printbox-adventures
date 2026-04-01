@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { findEvent, getEventPhotos, sendPhoto, getConfig } from '../shared/api'
+import { findEvent, getEventPhotos, sendPhoto, getConfig, processPayment } from '../shared/api'
 import './Mobile.css'
 
 // ============================================
@@ -34,7 +34,14 @@ const STEP_EVENT = 'event'      // Paso 1: Ingresar código del evento
 const STEP_GALLERY = 'gallery'  // Paso 2: Ver galería y seleccionar fotos
 const STEP_CAMERA = 'camera'    // Paso 3: Tomar fotos con la cámara
 const STEP_ORDER = 'order'      // Paso 4: Resumen del pedido
-const STEP_SUCCESS = 'success'  // Paso 5: Confirmación de envío
+const STEP_PAYMENT = 'payment'  // Paso 5: Pasarela de pago (Square)
+const STEP_SUCCESS = 'success'  // Paso 6: Confirmación de envío
+
+// ============================================
+// CONSTANTES DE SQUARE (Sandbox)
+// ============================================
+const SQUARE_APP_ID = 'sandbox-sq0idb-VVNYlNy0Cy0FOqXbOpHTKw'
+const SQUARE_LOCATION_ID = 'LPMZR4EC495TD'
 
 // ============================================
 // COMPONENTE PRINCIPAL
@@ -72,6 +79,9 @@ export default function MobileApp() {
   // --- Estados de envío ---
   const [sending, setSending] = useState(false)          // Enviando pedido
   const [toast, setToast] = useState(null)               // Mensaje de toast
+  const [squareCard, setSquareCard] = useState(null)     // Objeto Square card
+  const [squareError, setSquareError] = useState('')     // Error de Square
+  const [squareLoading, setSquareLoading] = useState(false) // Pago Square en progreso
 
   // ============================================
   // FUNCIÓN PARA OBTENER URL DE IMAGEN CON PROXY
@@ -207,6 +217,98 @@ export default function MobileApp() {
     }).catch(() => { })
   }, [])
 
+  // Refrescar precios del config cada 10 segundos (síntesis con admin)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getConfig().then(d => {
+        if (d.textos) {
+          setTextos({
+            precio1: d.textos.precio1 || '5',
+            precio2: d.textos.precio2 || '9',
+            precio3: d.textos.precio3 || '12',
+            ...d.textos
+          })
+        }
+      }).catch(() => {})
+    }, 10000)
+    return () => clearInterval(interval)
+  }, [])
+
+  // Inicializar Square en el paso de pedido
+  useEffect(() => {
+    if (step !== STEP_ORDER) return
+
+    const initSquare = async () => {
+      if (!window.Square) {
+        setSquareError('Square SDK no cargado')
+        return
+      }
+      try {
+        const payments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
+        const card = await payments.card()
+        await card.attach('#card-container')
+        setSquareCard(card)
+        setSquareError('')
+      } catch (e) {
+        setSquareError(e.message || 'Error inicializando Square')
+      }
+    }
+
+    initSquare()
+  }, [step])
+
+  const handleSquarePayment = async () => {
+    if (!squareCard) {
+      setSquareError('Square no inicializado')
+      return
+    }
+    setSquareLoading(true)
+    try {
+      const result = await squareCard.tokenize()
+      if (result.status !== 'OK') {
+        throw new Error(result.errors?.[0]?.message || 'Tokenización fallida')
+      }
+
+      const amount = parseFloat(totalPrice())
+      const body = await processPayment({
+        token: result.token,
+        amount,
+        currency: 'EUR',
+        location_id: SQUARE_LOCATION_ID,
+      })
+
+      if (body?.errors) {
+        throw new Error(body.errors[0]?.detail || 'Error al procesar el pago')
+      }
+
+      // procesar envío de fotos
+      await sendOrderPhotos()
+      setStep(STEP_SUCCESS)
+    } catch (e) {
+      setSquareError(`Error Square: ${e.message}`)
+    } finally {
+      setSquareLoading(false)
+    }
+  }
+
+  /**
+   * Refrescar precios cuando se conecta al evento o navega al paso ORDER
+   */
+  useEffect(() => {
+    if (uuid || step === STEP_ORDER) {
+      getConfig().then(d => {
+        if (d.textos) {
+          setTextos({
+            precio1: d.textos?.precio1 || '5',
+            precio2: d.textos?.precio2 || '9',
+            precio3: d.textos?.precio3 || '12',
+            ...d.textos
+          })
+        }
+      }).catch(() => { })
+    }
+  }, [uuid, step])
+
   /**
    * Guardar estado en localStorage cuando cambie
    */
@@ -249,6 +351,16 @@ export default function MobileApp() {
       const id = await findEvent(`ev-${eventCodeToUse}`)
       setUuid(id)
       uuidRef.current = id
+
+      // Recargar config para precios actualizados
+      try {
+        const configData = await getConfig()
+        if (configData.textos) {
+          setTextos(configData.textos)
+        }
+      } catch (err) {
+        console.error('Error recargando config:', err)
+      }
 
       // Intentar cargar fotos, pero no bloquear si falla
       try {
@@ -518,6 +630,28 @@ export default function MobileApp() {
   /**
    * Enviar el pedido al servidor
    */
+  async function sendOrderPhotos() {
+    // Enviar fotos de la galería seleccionadas
+    for (const photo of selected) {
+      const proxyUrl = getImageUrl(photo.uri_full || photo.uri)
+      const resp = await fetch(proxyUrl)
+      const blob = await resp.blob()
+      const base64 = await new Promise(res => {
+        const reader = new FileReader()
+        reader.onload = () => res(reader.result)
+        reader.readAsDataURL(blob)
+      })
+      const resized = await resizeImageBase64(base64, 1400)
+      await sendPhoto({ event: uuid, image: resized, times: photo.copies })
+    }
+
+    // Enviar fotos tomadas con la cámara
+    for (const photo of capturedPhotos) {
+      await sendPhoto({ event: uuid, image: photo.dataUrl, times: photo.copies })
+    }
+    return true
+  }
+
   async function handleSendOrder() {
     if (totalCopies === 0) {
       showToast('No has seleccionado ninguna foto')
@@ -525,26 +659,7 @@ export default function MobileApp() {
     }
     setSending(true)
     try {
-      // Enviar fotos de la galería seleccionadas
-      for (const photo of selected) {
-        // Convertir URL de la foto a base64 usando la URL proxy
-        const proxyUrl = getImageUrl(photo.uri_full || photo.uri)
-        const resp = await fetch(proxyUrl)
-        const blob = await resp.blob()
-        const base64 = await new Promise(res => {
-          const reader = new FileReader()
-          reader.onload = () => res(reader.result)
-          reader.readAsDataURL(blob)
-        })
-        const resized = await resizeImageBase64(base64, 1400)
-        await sendPhoto({ event: uuid, image: resized, times: photo.copies })
-      }
-
-      // Enviar fotos tomadas con la cámara
-      for (const photo of capturedPhotos) {
-        await sendPhoto({ event: uuid, image: photo.dataUrl, times: photo.copies })
-      }
-
+      await sendOrderPhotos()
       setStep(STEP_SUCCESS)
     } catch (e) {
       showToast(`Error: ${e.message}`)
@@ -583,16 +698,11 @@ export default function MobileApp() {
   }
 
   const procesarPago = async () => {
-    const payments = window.Square.payments(APP_ID, LOCATION_ID);
-    const card = await payments.card();
-    await card.attach('#card-container');
-
-    const result = await card.tokenize();
-    if (result.status === 'OK') {
-      // Enviar el token (result.token) al proxy.php
-      enviarAlBackend(result.token);
+    // Método opcional, se usa handleSquarePayment() desde el formulario de pago.
+    if (squareCard) {
+      await handleSquarePayment()
     }
-  };
+  }
 
   // ============================================
   // RENDER POR PASO
@@ -895,18 +1005,6 @@ export default function MobileApp() {
               >
                 <i className="bi bi-trash" />
               </button>
-              // Insertar en la sección de "Resumen de Pedido"
-              <div id="square-payment-section" className="p-3 bg-dark border rounded mt-3">
-                <h6 className="text-white text-center mb-3">Finalizar Pago Seguro</h6>
-                {/* Botones de Apple Pay / Google Pay */}
-                <div id="google-pay-button"></div>
-                <div className="text-muted text-center my-2 small">— o tarjeta —</div>
-                {/* Formulario de tarjeta de Square */}
-                <div id="card-container"></div>
-                <button id="card-button" className="btn btn-warning w-100 mt-3 fw-bold">
-                  PAGAR {totalPedido}€
-                </button>
-              </div>
             </div>
 
           ))}
@@ -917,7 +1015,20 @@ export default function MobileApp() {
             <span className="order-total-amount">{totalPrice()}€</span>
           </div>
 
-          {/* Nota de pago */}
+          {/* Square Payment */}
+          <div id="square-payment-section" className="p-3 bg-dark border rounded mt-3 w-100">
+            <h6 className="text-white text-center mb-3">Finalizar Pago Seguro</h6>
+            <div id="card-container" style={{ minHeight: '170px' }}></div>
+            {squareError && <div className="text-danger text-center mt-2">{squareError}</div>}
+            <button
+              className="btn btn-warning w-100 mt-3 fw-bold"
+              onClick={handleSquarePayment}
+              disabled={squareLoading || !squareCard || totalCopies === 0}
+            >
+              {squareLoading ? 'Procesando pago...' : `PAGAR ${totalPrice()}€`}
+            </button>
+          </div>
+
           <div className="alert alert-secondary order-payment-note">
             <i className="bi bi-credit-card text-warning" />
             El pago se realizará con tarjeta, Google Pay, etc. desde el móvil

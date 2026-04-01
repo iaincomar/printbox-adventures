@@ -60,6 +60,49 @@ app.use('/descargas', express.static(path.join(DATA_DIR, 'descargas')))
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
+// Square payment endpoint (local backend)
+app.post('/process-payment', async (req, res) => {
+  try {
+    const { token, amount, currency = 'EUR', location_id } = req.body
+
+    if (!token || !amount) {
+      return res.status(400).json({ error: 'Token y amount son requeridos' })
+    }
+
+    const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN || 'sandbox-sq0atb-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+    const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID || 'LPMZR4EC495TD'
+
+    const payload = {
+      source_id: token,
+      idempotency_key: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      amount_money: {
+        amount: Math.round(parseFloat(amount) * 100),
+        currency,
+      },
+      location_id: location_id || SQUARE_LOCATION_ID,
+    }
+
+    const squareRes = await fetch('https://connect.squareupsandbox.com/v2/payments', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${SQUARE_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await squareRes.json()
+    if (!squareRes.ok) {
+      return res.status(squareRes.status).json(data)
+    }
+
+    res.json(data)
+  } catch (error) {
+    console.error('process-payment error:', error)
+    res.status(500).json({ error: error.message || 'Error al procesar el pago' })
+  }
+})
+
 app.use('/printbox', printboxRoutes)
 app.use('/print', printRoutes)
 app.use('/config', configRoutes)

@@ -61,12 +61,12 @@ router.post('/find-event', async (req, res) => {
   }
 })
 
-// POST /printbox/photos?page=N  →  POST /api/v1/events/photos?page=N
+// POST /printbox/photos?page=N  →  POST /api/v1/events/photos?page=N&limit=20
 router.post('/photos', async (req, res) => {
   try {
     const page = req.query.page || 1
     const { event } = req.body
-    const r = await postWithCsrf(`${BASE}/api/v1/events/photos?page=${page}`, { event })
+    const r = await postWithCsrf(`${BASE}/api/v1/events/photos?page=${page}&limit=20`, { event })
     const data = await r.json()
     console.log(`[printbox] photos page=${page} → ${r.status}`)
     if (!r.ok) return res.status(r.status).json({ error: data })

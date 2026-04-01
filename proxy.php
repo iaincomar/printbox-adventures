@@ -257,28 +257,44 @@ if (strpos($uri, '/proxy-image/') === 0) {
 // Ruta: /proxy.php?route=process-payment
 if ($_GET['route'] === 'process-payment') {
     $data = json_decode(file_get_contents('php://input'), true);
-    
+
+    $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'sandbox-sq0atb-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LPMZR4EC495TD';
+
+    $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
+    $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
+
+    if (!$data['token'] || $amount <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'token y amount son requeridos']);
+        exit;
+    }
+
     $payload = json_encode([
         "source_id" => $data['token'],
-        "idempotency_key" => uniqid(),
+        "idempotency_key" => uniqid('pba_', true),
         "amount_money" => [
-            "amount" => $data['amount'] * 100, // Euros a céntimos
-            "currency" => "EUR"
+            "amount" => $amount,
+            "currency" => ($data['currency'] ?? 'EUR')
         ],
-        "location_id" => "TU_LOCATION_ID"
+        "location_id" => $location
     ]);
 
-    $url = "https://connect.squareupsandbox.com/v2/payments"; // Cambiar a production en vivo
+    $url = "https://connect.squareupsandbox.com/v2/payments";
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . $ACCESS_TOKEN,
+        'Authorization: Bearer ' . $SQUARE_ACCESS_TOKEN,
         'Content-Type: application/json'
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    
+
     $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    http_response_code($httpCode ?: 500);
     echo $response;
     exit;
 }

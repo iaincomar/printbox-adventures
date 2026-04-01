@@ -306,8 +306,8 @@
 /* ========== GRID GALERÍA ========== */
 .viewer-gallery-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 0.8rem;
   padding: 1rem;
   max-width: 100%;
   margin: 0 auto;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { findEvent, getEventPhotos, printJob, saveConfig } from '../shared/api'
+import { findEvent, getEventPhotos, printJob, saveConfig, sendPhoto } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
@@ -150,11 +150,18 @@ export default function ViewerApp() {
     const saved = loadViewerState()
 
     Promise.all([
-      fetch(`${BACKEND}/config`).then(r => r.json()),
-      fetch(`${BACKEND}/print/count`).then(r => r.json()).catch(() => ({ count: 0 })),
+      fetch(BACKEND === '/' ? '/config' : `${BACKEND}/config`).then(r => r.json()),
+      fetch(BACKEND === '/' ? '/print/count' : `${BACKEND}/print/count`).then(r => r.json()).catch(() => ({ count: 0 })),
     ]).then(([d, c]) => {
       const mergedConfig = { ...(d.config || {}), ...(saved?.config || {}) }
-      const mergedTextos = { ...(d.textos || {}), ...(saved?.textos || {}) }
+      const mergedTextos = { 
+        precio1: '5', 
+        precio2: '9', 
+        precio3: '12', 
+        empresa: 'PrintboxAdventures',
+        ...(d.textos || {}), 
+        ...(saved?.textos || {}) 
+      }
 
       setConfig(mergedConfig)
       setTextos(mergedTextos)
@@ -237,21 +244,32 @@ export default function ViewerApp() {
     const newConfig = { ...config, evento: `ev-${adminEventCode}`, evento_printer: `ev-${adminPrinterEventCode}` }
     const newTextos = {
       ...textos,
-      precio1: adminPrice1,
-      precio2: adminPrice2,
-      precio3: adminPrice3
+      precio1: adminPrice1 || textos?.precio1 || '5',
+      precio2: adminPrice2 || textos?.precio2 || '9',
+      precio3: adminPrice3 || textos?.precio3 || '12'
     }
 
+    // Actualizar estado inmediatamente para mostrar cambios en tiempo real
     setConfig(newConfig)
     setTextos(newTextos)
-    await saveConfig(newConfig, newTextos).catch(() => {})
+    
+    // Guardar en servidor
+    await saveConfig(newConfig, newTextos).catch(e => {
+      console.warn('Error guardando config:', e.message)
+    })
 
     // Refrescar configuración desde servidor para asegurar actualización en tiempo real
     try {
       const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
       const freshConfig = await fetch(configUrl).then(r => r.json())
       const mergedConfig = { ...newConfig, ...freshConfig.config }
-      const mergedTextos = { ...newTextos, ...freshConfig.textos }
+      const mergedTextos = {
+        precio1: freshConfig.textos?.precio1 || newTextos.precio1 || '5',
+        precio2: freshConfig.textos?.precio2 || newTextos.precio2 || '9',
+        precio3: freshConfig.textos?.precio3 || newTextos.precio3 || '12',
+        ...freshConfig.textos,
+        ...newTextos
+      }
       setConfig(mergedConfig)
       setTextos(mergedTextos)
     } catch (e) {
@@ -321,7 +339,7 @@ export default function ViewerApp() {
     const cachedPhotos = readCache()
     if (cachedPhotos && Array.isArray(cachedPhotos) && cachedPhotos.length > 0) {
       setAllPhotos(cachedPhotos)
-      setLastPage(Math.ceil(cachedPhotos.length / 10))
+      setLastPage(Math.ceil(cachedPhotos.length / 100))
       setError(null)
       setLoading(false)
       return
@@ -346,7 +364,7 @@ export default function ViewerApp() {
       }
 
       setAllPhotos(allPhotosArray)
-      setLastPage(Math.ceil(allPhotosArray.length / 10))
+      setLastPage(Math.ceil(allPhotosArray.length / 100))
       setError(null)
       writeCache(allPhotosArray)
     } catch (e) {
@@ -369,8 +387,8 @@ export default function ViewerApp() {
   // PAGINACIÓN
   // ============================================
 
-  // Calcular fotos para la página actual (10 por página)
-  const currentPhotos = allPhotos.slice((currentPage - 1) * 10, currentPage * 10)
+  // Calcular fotos para la página actual (100 por página - suficiente para cualquier pantalla)
+  const currentPhotos = allPhotos.slice((currentPage - 1) * 100, currentPage * 100)
 
   // Autoplay: cambiar página automáticamente cada 5 segundos si está activado
   useInterval(
