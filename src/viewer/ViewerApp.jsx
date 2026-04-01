@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { findEvent, getEventPhotos, printJob, saveConfig, sendPhoto } from '../shared/api'
+import { findEvent, getEventPhotos, printJob, saveConfig, getConfig, sendPhoto } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
@@ -237,45 +237,59 @@ export default function ViewerApp() {
     // Load current values
     setAdminEventCode(config?.evento?.replace('ev-', '') || '')
     setAdminPrinterEventCode(config?.evento_printer?.replace('ev-', '') || '')
-    setAdminPrice1(textos?.precio1 || '')
-    setAdminPrice2(textos?.precio2 || '')
-    setAdminPrice3(textos?.precio3 || '')
+    setAdminPrice1(textos?.precio1 || '5')
+    setAdminPrice2(textos?.precio2 || '9')
+    setAdminPrice3(textos?.precio3 || '12')
   }
 
   async function handleSaveAdminConfig() {
     const newConfig = { ...config, evento: `ev-${adminEventCode}`, evento_printer: `ev-${adminPrinterEventCode}` }
+    
+    // IMPORTANTE: Usar SIEMPRE los valores qu escribió el usuario en los inputs
+    // Si el input está vacío, mantener el valor anterior
     const newTextos = {
-      ...textos,
-      precio1: adminPrice1 || textos?.precio1 || '5',
-      precio2: adminPrice2 || textos?.precio2 || '9',
-      precio3: adminPrice3 || textos?.precio3 || '12'
+      text_es: textos?.text_es || '¡Consigue tu foto del evento!',
+      text_en: textos?.text_en || 'Get your event photo!',
+      text_fr: textos?.text_fr || 'Obtenez votre photo!',
+      text_de: textos?.text_de || 'Hol dir dein Foto!',
+      precio1: adminPrice1 && adminPrice1.trim() !== '' ? adminPrice1 : (textos?.precio1 || '5'),
+      precio2: adminPrice2 && adminPrice2.trim() !== '' ? adminPrice2 : (textos?.precio2 || '9'),
+      precio3: adminPrice3 && adminPrice3.trim() !== '' ? adminPrice3 : (textos?.precio3 || '12'),
+      empresa: textos?.empresa || 'PrintboxAdventures',
     }
 
-    // Actualizar estado inmediatamente para mostrar cambios en tiempo real
+    console.log('Admin guardando:', { adminPrice1, adminPrice2, adminPrice3, newTextos })
+
+    // Actualizar estado inmediatamente
     setConfig(newConfig)
     setTextos(newTextos)
+    setAdminError('') // Limpiar errores previos
     
     // Guardar en servidor
-    await saveConfig(newConfig, newTextos).catch(e => {
-      console.warn('Error guardando config:', e.message)
-    })
-
-    // Refrescar configuración desde servidor para asegurar actualización en tiempo real
     try {
-      const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
-      const freshConfig = await fetch(configUrl).then(r => r.json())
-      const mergedConfig = { ...newConfig, ...freshConfig.config }
-      const mergedTextos = {
-        precio1: freshConfig.textos?.precio1 || newTextos.precio1 || '5',
-        precio2: freshConfig.textos?.precio2 || newTextos.precio2 || '9',
-        precio3: freshConfig.textos?.precio3 || newTextos.precio3 || '12',
-        ...freshConfig.textos,
-        ...newTextos
-      }
-      setConfig(mergedConfig)
-      setTextos(mergedTextos)
+      const saveResult = await saveConfig(newConfig, newTextos)
+      console.log('Resultado de guardar:', saveResult)
+      setAdminError('✓ Precios guardados correctamente')
+      
+      // Esperar 1 segundo y luego recargar config
+      setTimeout(() => {
+        try {
+          const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
+          console.log('Recargando config desde:', configUrl)
+          fetch(configUrl)
+            .then(r => r.json())
+            .then(freshConfig => {
+              console.log('Config recargada del servidor:', freshConfig.textos)
+              setTextos(freshConfig.textos || newTextos)
+            })
+            .catch(e => console.error('Error en reload de config:', e))
+        } catch (e) {
+          console.error('Error al recargar config:', e)
+        }
+      }, 500)
     } catch (e) {
-      console.warn('Error refrescando config:', e.message)
+      console.error('Error guardando config:', e.message)
+      setAdminError('Error guardando precios: ' + e.message)
     }
 
     // Reload event if changed
@@ -285,13 +299,16 @@ export default function ViewerApp() {
         .catch(e => setError(`No se pudo conectar: ${e.message}`))
     }
     
-    setShowAdminConfig(false)
-    // Clear admin values
-    setAdminEventCode('')
-    setAdminPrinterEventCode('')
-    setAdminPrice1('')
-    setAdminPrice2('')
-    setAdminPrice3('')
+    // No cerrar el panel aún - dejar que vea el mensaje de éxito
+    setTimeout(() => {
+      setShowAdminConfig(false)
+      // Limpiar valores
+      setAdminEventCode('')
+      setAdminPrinterEventCode('')
+      setAdminPrice1('')
+      setAdminPrice2('')
+      setAdminPrice3('')
+    }, 1500)
   }
 
   // ============================================

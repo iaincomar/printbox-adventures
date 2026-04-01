@@ -2,12 +2,29 @@ Options -MultiViews
 RewriteEngine On
 RewriteBase /
 
-# Redirigir API al proxy (con y sin barra final)
-RewriteRule ^health$ proxy.php [L,QSA]
-RewriteRule ^config/?$ proxy.php [L,QSA]
-RewriteRule ^print/.*$ proxy.php [L,QSA]
-RewriteRule ^printbox/.*$ proxy.php [L,QSA]
-RewriteRule ^proxy-image/.*$ proxy.php [L,QSA] 
+# ¡IMPORTANTE! Las reglas de API DEBEN ir ANTES de la regla de archivos/directorios reales
+# Porque /config/ es una carpeta real que existe, Apache la ve como directorio
+# y no la reescribe si la regla de archivos/directorios reales viene primero
+
+# Config endpoints - ANTES que "archivos reales"
+RewriteRule ^config/?$ /proxy.php [PT,L,QSA]
+
+# Reset config endpoint
+RewriteRule ^reset-config/?$ /proxy.php [PT,L,QSA]
+
+# Debug endpoint
+RewriteRule ^debug(/.*)?$ /proxy.php [PT,L,QSA]
+
+# APIs y proxy
+RewriteRule ^health$ /proxy.php [PT,L,QSA]
+RewriteRule ^print/.*$ /proxy.php [PT,L,QSA]
+RewriteRule ^printbox/.*$ /proxy.php [PT,L,QSA]
+RewriteRule ^proxy-image/.*$ /proxy.php [PT,L,QSA]
+
+# AHORA sí, permitir archivos y directorios reales (index.html, CSS, JS, imágenes, etc.)
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
 
 # React Router: todo lo demás a index.html
 RewriteCond %{REQUEST_FILENAME} !-f

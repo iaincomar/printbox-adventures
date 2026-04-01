@@ -3,12 +3,21 @@ error_reporting(E_ALL);
 ini_set('display_errors', 0); // No mostrar errores en producción
 
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+header('Access-Control-Max-Age: 86400');
 
+// Responder a preflight requests
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
+}
+
+// Headers anti-cache para config
+if (strpos($_SERVER['REQUEST_URI'], '/config') !== false || strpos($_SERVER['REQUEST_URI'], '/reset-config') !== false) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
 }
 
 // URI normalizada (sin barra final, sin query string)
@@ -41,6 +50,20 @@ if (!function_exists('curl_init')) {
 }
 
 // ── Funciones helper ──
+
+function getConfigDir() {
+    // En Windows local: usar LOCALAPPDATA
+    $localAppData = getenv('LOCALAPPDATA');
+    if ($localAppData) {
+        $dir = $localAppData . '/PrintboxAdventures/config';
+        if (is_writable(dirname($dir))) {
+            return $dir;
+        }
+    }
+    // En servidor web (IONOS): usar directorio del script
+    return __DIR__ . '/config';
+}
+
 function getCsrfToken() {
     global $PRINTBOX_BASE, $cookiePath;
     $ch = curl_init($PRINTBOX_BASE . '/sanctum/csrf-cookie');
@@ -99,6 +122,12 @@ function proxyPost($url, $data, $extraHeaders = []) {
 $body = file_get_contents('php://input');
 $data = json_decode($body, true) ?? [];
 
+// Log TODOS los requests para debuggear
+@file_put_contents(__DIR__ . '/pba_requests.log', 
+    date('Y-m-d H:i:s') . " {$_SERVER['REQUEST_METHOD']} {$_SERVER['REQUEST_URI']} " . 
+    "Content-Length:" . ($_SERVER['CONTENT_LENGTH'] ?? '0') . " Body:" . substr($body, 0, 200) . "\n", 
+    FILE_APPEND);
+
 header('Content-Type: application/json');
 
 // ── /health ──
@@ -116,7 +145,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     // Limpiar caché para asegurar lectura fresca del disco
     clearstatcache(true);
     
-    $configDir = __DIR__ . '/config';
+    $configDir = getConfigDir();
     $config = [
         'servidor'  => 'http://gestion.printboxweb.com',
         'evento'    => '', 'timer' => 5, 'impresora' => '', 'delay' => 5,
@@ -140,22 +169,25 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $textosFile = $configDir . '/textos.txt';
     if (file_exists($textosFile)) {
         $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $keys  = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
+        
+        // Mapear claves cortas del archivo a claves largas esperadas por la app
+        $keyMap = ['es' => 'text_es', 'en' => 'text_en', 'fr' => 'text_fr', 'de' => 'text_de'];
         
         foreach ($lines as $line) {
             $line = trim($line);
             if (strpos($line, ':') !== false) {
                 $parts = explode(':', $line, 2);
-                $key = trim($parts[0]);
+                $shortKey = trim($parts[0]);
                 $val = trim($parts[1] ?? '');
-            } else {
-                $key = '';
-                $val = $line;
-            }
-            
-            // Mapear por nombre de clave en lugar de índice
-            if (in_array($key, $keys)) {
-                $textos[$key] = $val;
+                
+                // Convertir clave corta a larga si aplica
+                $key = isset($keyMap[$shortKey]) ? $keyMap[$shortKey] : $shortKey;
+                
+                // Guardar si es una clave válida
+                $validKeys = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
+                if (in_array($key, $validKeys)) {
+                    $textos[$key] = $val;
+                }
             }
         }
     }
@@ -166,8 +198,19 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 
 // ── /config POST ── (igual que antes) ──
 if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $configDir = __DIR__ . '/config';
-    if (!is_dir($configDir)) mkdir($configDir, 0755, true);
+    // Headers anti-cache
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+    header('Expires: 0');
+    
+    $configDir = getConfigDir();
+    if (!is_dir($configDir)) {
+        if (!mkdir($configDir, 0755, true)) {
+            http_response_code(500);
+            echo json_encode(['error' => 'No se pudo crear directorio config']);
+            exit();
+        }
+    }
 
     $writeErrors = [];
 
@@ -186,36 +229,20 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $t = $data['textos'];
         $textosFile = $configDir . '/textos.txt';
         
-        // Leer valores existentes para preservarlos
-        $existingTextos = [
-            'text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '',
-            'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => ''
-        ];
-        if (file_exists($textosFile)) {
-            $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-            foreach ($lines as $line) {
-                $line = trim($line);
-                if (strpos($line, ':') !== false) {
-                    $parts = explode(':', $line, 2);
-                    $key = trim($parts[0]);
-                    $val = trim($parts[1] ?? '');
-                    if (in_array($key, ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'])) {
-                        $existingTextos[$key] = $val;
-                    }
-                }
-            }
-        }
+        // Log para debuggear
+        @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /config textos: " . json_encode($t) . "\n", FILE_APPEND);
         
-        // Mezclar nuevos valores con existentes (los nuevos prevalecen si no están vacíos)
+        // Crear el contenido directamente usando SOLO los valores que llegaron
+        // Sin hacer defaults aquí - si está vacío, mantener lo que había
         $finalTextos = [
-            'text_es' => ($t['text_es'] !== '' && isset($t['text_es'])) ? $t['text_es'] : $existingTextos['text_es'],
-            'text_en' => ($t['text_en'] !== '' && isset($t['text_en'])) ? $t['text_en'] : $existingTextos['text_en'],
-            'text_fr' => ($t['text_fr'] !== '' && isset($t['text_fr'])) ? $t['text_fr'] : $existingTextos['text_fr'],
-            'text_de' => ($t['text_de'] !== '' && isset($t['text_de'])) ? $t['text_de'] : $existingTextos['text_de'],
-            'precio1' => ($t['precio1'] !== '' && isset($t['precio1'])) ? $t['precio1'] : $existingTextos['precio1'],
-            'precio2' => ($t['precio2'] !== '' && isset($t['precio2'])) ? $t['precio2'] : $existingTextos['precio2'],
-            'precio3' => ($t['precio3'] !== '' && isset($t['precio3'])) ? $t['precio3'] : $existingTextos['precio3'],
-            'empresa' => ($t['empresa'] !== '' && isset($t['empresa'])) ? $t['empresa'] : $existingTextos['empresa'],
+            'text_es' => $t['text_es'] ?? '¡Consigue tu foto del evento!',
+            'text_en' => $t['text_en'] ?? 'Get your event photo!',
+            'text_fr' => $t['text_fr'] ?? 'Obtenez votre photo!',
+            'text_de' => $t['text_de'] ?? 'Hol dir dein Foto!',
+            'precio1' => $t['precio1'] ?? '5',
+            'precio2' => $t['precio2'] ?? '9',
+            'precio3' => $t['precio3'] ?? '12',
+            'empresa' => $t['empresa'] ?? 'PrintboxAdventures',
         ];
         
         $content = implode("\n", [
@@ -228,12 +255,10 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'precio3:' . $finalTextos['precio3'],
             'empresa:' . $finalTextos['empresa'],
         ]);
+        
+        // Escribir reemplazando completamente el archivo
         $success = file_put_contents($textosFile, $content, LOCK_EX);
         if ($success === false) $writeErrors[] = 'No se pudo escribir textos.txt';
-        else {
-            // Forzar que el file system sincronice
-            @fsync(fopen($textosFile, 'r'));
-        }
     }
 
     if (count($writeErrors) > 0) {
@@ -293,6 +318,56 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     echo json_encode(['ok' => true, 'config' => $config, 'textos' => $textos]);
+    exit();
+}
+
+// ── /debug/config (para ver qué está en el archivo) ──
+if ($uri === '/debug/config' || $uri === '/debug/config/') {
+    $configDir = getConfigDir();
+    $textosFile = $configDir . '/textos.txt';
+    $logFile = $configDir . '/debug.log';
+    
+    $result = [
+        'configDir' => $configDir,
+        'textosFile' => $textosFile,
+        'fileExists' => file_exists($textosFile),
+        'isWritable' => is_writable($configDir),
+        'rawContent' => file_exists($textosFile) ? file_get_contents($textosFile) : 'archivo no existe',
+        'lastLog' => file_exists($logFile) ? implode("\n", array_slice(file($logFile, FILE_IGNORE_NEW_LINES), -5)) : 'sin logs',
+    ];
+    
+    // Como JSON devolvemos lo que está en el archivo
+    if (file_exists($textosFile)) {
+        $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        $result['parsed'] = [];
+        $keyMap = ['es' => 'text_es', 'en' => 'text_en', 'fr' => 'text_fr', 'de' => 'text_de'];
+        foreach ($lines as $line) {
+            $parts = explode(':', $line, 2);
+            $shortKey = trim($parts[0]);
+            $val = trim($parts[1] ?? '');
+            $key = isset($keyMap[$shortKey]) ? $keyMap[$shortKey] : $shortKey;
+            $result['parsed'][$key] = $val;
+        }
+    }
+    
+    echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    exit();
+}
+
+// ── /reset-config (restaurar valores por defecto) ──
+if ($uri === '/reset-config' || $uri === '/reset-config/') {
+    $configDir = getConfigDir();
+    if (!is_dir($configDir)) {
+        mkdir($configDir, 0755, true);
+    }
+    
+    $defaultContent = "es:¡Consigue tu foto del evento!\nen:Get your event photo!\nfr:Obtenez votre photo!\nde:Hol dir dein Foto!\nprecio1:5\nprecio2:9\nprecio3:12\nempresa:PrintboxAdventures";
+    
+    file_put_contents($configDir . '/textos.txt', $defaultContent);
+    @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " RESET /reset-config\n", FILE_APPEND);
+    clearstatcache();
+    
+    echo json_encode(['ok' => true, 'message' => 'Config restaurada a valores por defecto']);
     exit();
 }
 
@@ -379,7 +454,7 @@ if ($_GET['route'] === 'process-payment') {
     $data = json_decode(file_get_contents('php://input'), true);
 
     $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
-    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
+    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LPMZR4EC495TD';
 
     $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
     $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;

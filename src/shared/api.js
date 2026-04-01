@@ -1,7 +1,13 @@
 // Detecta si estamos en local (Electron/dev) o en producción (IONOS)
-// En desarrollo: http://localhost:4000 para mobile, https://printbox.incomar.net para viewer
-// En producción: rutas relativas para proxy.php
-const BACKEND_URL = window.location.hostname === 'localhost' ? (window.isViewer ? 'https://printbox.incomar.net' : 'http://localhost:4000') : ''
+// En Electron: siempre usar localhost:4000 para todo (viewer, mobile, printer)
+// En localhost web: http://localhost:4000 para mobile, https://printbox.incomar.net para viewer (sin usar proxy)
+// En producción IONOS: rutas relativas para proxy.php (todos los apps)
+const BACKEND_URL = 
+  window.electronAPI ? 'http://localhost:4000' : 
+  (window.location.hostname === 'localhost' ? 
+    (window.isViewer ? 'https://printbox.incomar.net' : 'http://localhost:4000') : 
+    '' // Producción: usar rutas relativas para proxy.php
+  )
 
 // ─── API Printbox ───────────────────────────────────────────────────────────
 
@@ -75,20 +81,78 @@ export async function printJob({ imageUrl, imageName, printer, delay = 5 }) {
 
 export async function getConfig() {
   const url = `${BACKEND_URL}/config`
-  const res = await fetch(url)
-  const data = await res.json()
-  return data
+  try {
+    const res = await fetch(url)
+    if (!res.ok) {
+      // Log the error but return defaults instead of throwing
+      console.error(`GET /config returned ${res.status}, using defaults`)
+      // Return default config structure
+      return {
+        config: {
+          servidor: 'http://gestion.printboxweb.com',
+          evento: '',
+          timer: 5,
+          impresora: '',
+          delay: 5,
+        },
+        textos: {
+          text_es: '¡Consigue tu foto del evento!',
+          text_en: 'Get your event photo!',
+          text_fr: 'Obtenez votre photo!',
+          text_de: 'Hol dir dein Foto!',
+          precio1: '5',
+          precio2: '9',
+          precio3: '12',
+          empresa: 'PrintboxAdventures',
+        },
+      }
+    }
+    const data = await res.json()
+    return data
+  } catch (error) {
+    console.error('Error fetching config:', error)
+    // Return defaults on network error
+    return {
+      config: {
+        servidor: 'http://gestion.printboxweb.com',
+        evento: '',
+        timer: 5,
+        impresora: '',
+        delay: 5,
+      },
+      textos: {
+        text_es: '¡Consigue tu foto del evento!',
+        text_en: 'Get your event photo!',
+        text_fr: 'Obtenez votre photo!',
+        text_de: 'Hol dir dein Foto!',
+        precio1: '5',
+        precio2: '9',
+        precio3: '12',
+        empresa: 'PrintboxAdventures',
+      },
+    }
+  }
 }
 
 export async function saveConfig(config, textos) {
   const url = `${BACKEND_URL}/config`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ config, textos }),
-  })
-  const data = await res.json()
-  return data
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config, textos }),
+    })
+    if (!res.ok) {
+      console.error(`POST /config returned ${res.status}`)
+      const errorText = await res.text()
+      throw new Error(`HTTP ${res.status}: ${errorText.substring(0, 100)}`)
+    }
+    const data = await res.json()
+    return data
+  } catch (error) {
+    console.error('Error saving config:', error)
+    throw error
+  }
 }
 
 export async function processPayment({ token, amount, currency = 'EUR', location_id }) {

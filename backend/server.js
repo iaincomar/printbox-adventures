@@ -27,7 +27,7 @@ app.locals.dataDir = DATA_DIR
 )
 
 // Copiar config por defecto si no existe
-const defaultConfig = path.join(process.cwd(), 'config')
+const defaultConfig = path.join(__dirname, '../config')
 const userConfig = path.join(DATA_DIR, 'config')
 if (fs.existsSync(defaultConfig)) {
   ;['servidor_api.txt', 'textos.txt'].forEach(f => {

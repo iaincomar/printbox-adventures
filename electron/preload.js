@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  backendUrl: 'https://printbox.incomar.net',
+  backendUrl: 'http://localhost:4000',
   installUpdate: () => ipcRenderer.invoke('install-update'),
 })
