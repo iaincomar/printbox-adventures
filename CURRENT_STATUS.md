@@ -1,85 +1,72 @@
-# Estado actual del bug de precios (abril 2026)
+# Estado actual (abril 2026)
+
+---
+
+## ✅ Implementado: precios por evento (textos_{evento}.txt)
+
+### Cómo funciona ahora
+
+Cada evento tiene su propio fichero de precios y textos en la carpeta `config/`:
+
+```
+config/
+├── servidor_api.txt       ← evento activo + config de impresora
+├── textos.txt             ← fallback global (si no existe fichero del evento)
+├── textos_1668042.txt     ← precios del evento 1668042
+├── textos_1234567.txt     ← precios del evento 1234567
+└── ...
+```
+
+- **GET `/config`** → lee `textos_{evento}.txt` del evento activo (fallback a `textos.txt`)
+- **GET `/config?evento=1668042`** → lee `textos_1668042.txt` directamente (para previsualizar en admin)
+- **POST `/config`** → guarda en `textos_{evento}.txt` según el evento que viene en el body
+- Al cambiar el código de evento en el panel Admin → carga automáticamente los precios guardados de ese evento
+
+### Archivos modificados
+- `proxy.php` → nuevas funciones `getTextosFile()`, `parseTextosFile()`, `writeTextosFile()`; GET y POST usan fichero por evento
+- `backend/routes/config.js` → mismas funciones para entorno Electron/local
+- `src/shared/api.js` → `getConfig(evento)` acepta evento como parámetro, usa `/config/` con barra final
+- `src/viewer/ViewerApp.jsx` → init usa `getConfig(savedEvento)`, nuevo `handleAdminEventCodeChange` carga precios al cambiar evento en admin
+
+---
+
+## ✅ Bug corregido: 301 Redirect destruía el POST (abril 2026)
+
+### Síntoma
+Al guardar desde el admin, los precios llegaban vacíos al servidor aunque el payload era correcto.
+
+### Causa
+Apache hacía un redirect 301 de `/config` → `/config/`. Los navegadores al seguir ese redirect convierten POST en GET, perdiendo el body completamente.
+
+### Corrección
+`saveConfig()` en `api.js` usa `/config/` con barra final para evitar el redirect.
 
 ---
 
 ## ✅ Bug corregido: localStorage sobreescribía precios del servidor (abril 2026)
 
 ### Síntoma
-Al guardar precios personalizados en el panel Admin (ej: 6€, 12€, 25€), el footer del Viewer
-volvía a mostrar los valores por defecto (5€, 9€, 12€) al recargar la página.
+Al guardar precios personalizados (ej: 6€, 12€, 25€), el footer volvía a los valores por defecto (5€, 9€, 12€) al recargar.
 
 ### Causa
-En `ViewerApp.jsx`, durante la inicialización, el merge de datos tenía el orden incorrecto:
+El merge en la inicialización tenía orden incorrecto: localStorage pisaba al servidor.
 
-```js
-// ANTES (bug): localStorage pisaba al servidor
-const mergedTextos = {
-  precio1: '5', precio2: '9', precio3: '12',  // defaults
-  ...(d.textos || {}),      // servidor los sobreescribía
-  ...(saved?.textos || {})  // localStorage los volvía a sobreescribir ← MAL
-}
-```
-
-Si el localStorage tenía precios viejos de una sesión anterior (ej: los defaults 5/9/12),
-estos siempre ganaban sobre lo que devolvía el servidor, incluso tras guardar correctamente.
-
-### Corrección aplicada (ViewerApp.jsx)
-
-1. **Orden del merge invertido**: servidor siempre tiene prioridad sobre localStorage.
-```js
-// DESPUÉS (correcto): servidor gana siempre
-const mergedTextos = {
-  precio1: '5', precio2: '9', precio3: '12',  // defaults
-  ...(saved?.textos || {}),  // localStorage como fallback
-  ...(d.textos || {}),       // servidor sobreescribe siempre ← BIEN
-}
-```
-
-2. **Limpieza de localStorage al guardar**: tras un guardado exitoso en Admin, se llama a
-`localStorage.removeItem('printbox_viewer_state')` para eliminar cualquier dato cacheado
-que pudiera contradecir lo recién guardado.
-
-### Archivos modificados
-- `src/viewer/ViewerApp.jsx` (líneas ~158-166 y ~268-272)
+### Corrección
+- Orden del merge invertido: `{ defaults, ...localStorage, ...servidor }` → servidor siempre gana
+- Tras guardar en Admin se hace `localStorage.removeItem('printbox_viewer_state')` para limpiar datos cacheados
 
 ---
 
-## Resumen anterior: bug de precios en proxy.php
-
-- El admin guarda `precio1`, `precio2`, `precio3` y se confirma con logs.
-- Sin embargo, en algunos entornos se responde con `textos` vacíos (`precio1: '', ...`).
-- El origen estaba en el puerto de configuración PHP (`proxy.php`), no en la UI.
-
-## Causa específica detectada
-
-1. En `/config POST` de `proxy.php`, la lectura de respuesta estaba usando un mapeo de claves que no coincidía con el formato de archivo.
-   - Archivo guarda `es:`, `en:`, `fr:`, `de:`
-   - POST hacía `in_array($key, ['text_es', 'text_en', ...])` → no coincide
-2. Resultado: `textos` devuelto tras el guardado quedaba con "".
-3. En `/config GET` se tuvo mapeo correcto (`es -> text_es`) por eso lectura GET podía funcionar, pero POST era inconsistente.
-
-## Corrección aplicada
-
-- `proxy.php` `/config POST` ahora lee `textos.txt` con un `keyMap` exacto:
-  - `es -> text_es`, `en -> text_en`, `fr -> text_fr`, `de -> text_de`
-  - `precio1`, `precio2`, `precio3`, `empresa` directos
-- Esto hace que `saveConfig()` retorne los valores reales guardados.
-
-## Verificación
-
-1. Guardar precios en admin.
-2. Ver `saveConfig` devuelve `textos` con precios correctos.
-3. Abrir `/config` (o `GET /debug/config`) y verificar que el archivo y el JSON reflejan valores guardados.
-
 ## Notas de entorno
 
-- Local dev: `src/shared/api.js` usa `HTTP://localhost:4000` cuando hostname es `localhost`.
-- Producción IONOS: `src/shared/api.js` usa rutas relativas (`''`) y se apoya en `proxy.php`.
-- `proxy.php` trata `LOCALAPPDATA` primero y luego `__DIR__/config`; en IONOS el segundo es el correcto.
+- Local dev: `src/shared/api.js` usa `http://localhost:4000`
+- Producción IONOS: rutas relativas `''` → `proxy.php`
+- `proxy.php` intenta `LOCALAPPDATA` primero, luego `__DIR__/config` (IONOS siempre el segundo)
 
-## Recomendaciones inmediatas
+## Debug útil
 
-- Ejecutar `GET /debug/config` tras un POST para confirmar la ruta y contenido.
-- Si queda en `texto vacío`, revisar permisos Escribir/Leer en el directorio `config/` (en IONOS) y en `LOCALAPPDATA` (en local).
-- Ejecutar `GET /reset-config` si necesitas retornar al estado inicial para pruebas.
-- Si los precios siguen mostrando valores viejos tras guardar, abrir DevTools → Application → Local Storage → borrar `printbox_viewer_state` manualmente y recargar.
+```
+GET /debug/config              → muestra evento activo, fichero en uso, todos los ficheros textos_*.txt
+GET /debug/config?evento=XXXX  → previsualiza fichero de un evento concreto
+GET /reset-config              → restaura textos.txt global a valores por defecto
+```
