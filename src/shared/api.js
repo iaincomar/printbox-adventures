@@ -1,11 +1,10 @@
 // Detecta si estamos en local (Electron/dev) o en producción (IONOS)
 // En Electron: siempre usar localhost:4000 para todo (viewer, mobile, printer)
-// En localhost web: http://localhost:4000 para mobile, https://printbox.incomar.net para viewer (sin usar proxy)
+// En localhost web: http://localhost:4000 para TODO (viewer, mobile) - mismo backend para sincronizar config
 // En producción IONOS: rutas relativas para proxy.php (todos los apps)
 const BACKEND_URL = 
   window.electronAPI ? 'http://localhost:4000' : 
-  (window.location.hostname === 'localhost' ? 
-    (window.isViewer ? 'https://printbox.incomar.net' : 'http://localhost:4000') : 
+  (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 
     '' // Producción: usar rutas relativas para proxy.php
   )
 
@@ -135,7 +134,10 @@ export async function getConfig() {
 }
 
 export async function saveConfig(config, textos) {
-  const url = `${BACKEND_URL}/config`
+  // IMPORTANTE: usar /config/ con barra final para evitar redirect 301 de Apache.
+  // Sin la barra, Apache redirige /config → /config/ y el redirect convierte POST en GET,
+  // perdiendo el body (los precios llegan vacíos al servidor).
+  const url = `${BACKEND_URL}/config/`
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -179,4 +181,3 @@ export async function sendPhoto({ event, image, times = 1 }) {
   if (!res.ok) throw new Error(data?.error?.message || data?.message || 'Error al enviar foto')
   return data
 }
-

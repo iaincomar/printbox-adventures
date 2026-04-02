@@ -34,10 +34,22 @@ router.get('/', (req, res) => {
 
     if (fs.existsSync(textosFile)) {
       const lines = fs.readFileSync(textosFile, 'utf8').split('\n')
-      const keys = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa']
-      lines.forEach((line, i) => {
-        const val = line.includes(':') ? line.split(':').slice(1).join(':').trim() : line.trim()
-        if (keys[i] !== undefined) textos[keys[i]] = val
+      lines.forEach((line) => {
+        const line_trimmed = line.trim()
+        if (line_trimmed && line_trimmed.includes(':')) {
+          const colonIndex = line_trimmed.indexOf(':')
+          const key = line_trimmed.substring(0, colonIndex).trim()
+          const val = line_trimmed.substring(colonIndex + 1).trim()
+          // Map by key name, not by line index
+          if (key === 'text_es' || key === 'es') textos['text_es'] = val
+          else if (key === 'text_en' || key === 'en') textos['text_en'] = val
+          else if (key === 'text_fr' || key === 'fr') textos['text_fr'] = val
+          else if (key === 'text_de' || key === 'de') textos['text_de'] = val
+          else if (key === 'precio1') textos['precio1'] = val
+          else if (key === 'precio2') textos['precio2'] = val
+          else if (key === 'precio3') textos['precio3'] = val
+          else if (key === 'empresa') textos['empresa'] = val
+        }
       })
     }
 
@@ -79,7 +91,30 @@ router.post('/', (req, res) => {
       fs.writeFileSync(path.join(CONFIG_DIR, 'textos.txt'), lines.join('\n'))
     }
 
-    res.json({ ok: true })
+    // Devolver los valores guardados (igual que GET)
+    const textosFile = path.join(CONFIG_DIR, 'textos.txt')
+    const textosResponse = { text_es: '', text_en: '', text_fr: '', text_de: '', precio1: '', precio2: '', precio3: '', empresa: '' }
+    if (fs.existsSync(textosFile)) {
+      const lines = fs.readFileSync(textosFile, 'utf8').split('\n')
+      lines.forEach((line) => {
+        const line_trimmed = line.trim()
+        if (line_trimmed && line_trimmed.includes(':')) {
+          const colonIndex = line_trimmed.indexOf(':')
+          const key = line_trimmed.substring(0, colonIndex).trim()
+          const val = line_trimmed.substring(colonIndex + 1).trim()
+          if (key === 'text_es' || key === 'es') textosResponse['text_es'] = val
+          else if (key === 'text_en' || key === 'en') textosResponse['text_en'] = val
+          else if (key === 'text_fr' || key === 'fr') textosResponse['text_fr'] = val
+          else if (key === 'text_de' || key === 'de') textosResponse['text_de'] = val
+          else if (key === 'precio1') textosResponse['precio1'] = val
+          else if (key === 'precio2') textosResponse['precio2'] = val
+          else if (key === 'precio3') textosResponse['precio3'] = val
+          else if (key === 'empresa') textosResponse['empresa'] = val
+        }
+      })
+    }
+
+    res.json({ ok: true, config, textos: textosResponse })
   } catch (err) {
     res.status(500).json({ error: err.message })
   }

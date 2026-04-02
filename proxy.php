@@ -297,20 +297,23 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (file_exists($textosFile)) {
         $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if ($lines) {
-            $keys = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
+            // Soportar claves cortas del archivo y claves largas del JSON
+            $keyMap = ['es' => 'text_es', 'en' => 'text_en', 'fr' => 'text_fr', 'de' => 'text_de'];
+            $validKeys = ['text_es','text_en','text_fr','text_de','precio1','precio2','precio3','empresa'];
+
             foreach ($lines as $line) {
                 $line = trim($line);
                 if (strpos($line, ':') !== false) {
                     $parts = explode(':', $line, 2);
-                    $key = trim($parts[0]);
+                    $shortKey = trim($parts[0]);
                     $val = trim($parts[1] ?? '');
+                    $key = $keyMap[$shortKey] ?? $shortKey;
                 } else {
                     $key = '';
                     $val = $line;
                 }
                 
-                // Mapear por nombre de clave
-                if (in_array($key, $keys)) {
+                if (in_array($key, $validKeys)) {
                     $textos[$key] = $val;
                 }
             }

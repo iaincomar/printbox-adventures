@@ -217,6 +217,15 @@ El `proxy.php` reemplaza completamente el backend Express en producción web:
 - Lee/escribe los archivos de configuración en `config/`
 - Proxea las imágenes en `/proxy-image/` para evitar mixed content
 
+#### Debug de configuración (nueva ruta)
+
+Si quieres verificar qué se guardó exactamente, en la URL del servidor ejecuta:
+
+- `GET /debug/config` → Devuelve `configDir`, estado del archivo, contenido crudo y parseado
+- `GET /reset-config` → Restaura valores por defecto (texto + precios)
+
+💡 Nota importante: en PHP (gateway) la ruta `getConfigDir()` intenta usar primero `LOCALAPPDATA` si existe, y luego `__DIR__/config`. En IONOS la ruta siempre es `__DIR__/config`.
+
 ### `vite.config.js` para web
 
 ```js

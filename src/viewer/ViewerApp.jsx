@@ -156,13 +156,15 @@ export default function ViewerApp() {
       fetch(BACKEND === '/' ? '/print/count' : `${BACKEND}/print/count`).then(r => r.json()).catch(() => ({ count: 0 })),
     ]).then(([d, c]) => {
       const mergedConfig = { ...(d.config || {}), ...(saved?.config || {}) }
+      // El servidor siempre tiene prioridad sobre localStorage para precios/textos.
+      // localStorage solo actúa como fallback si el servidor no devuelve un campo.
       const mergedTextos = { 
         precio1: '5', 
         precio2: '9', 
         precio3: '12', 
         empresa: 'PrintboxAdventures',
-        ...(d.textos || {}), 
-        ...(saved?.textos || {}) 
+        ...(saved?.textos || {}),  // localStorage como base de fallback
+        ...(d.textos || {}),       // servidor siempre sobreescribe
       }
 
       setConfig(mergedConfig)
@@ -245,8 +247,7 @@ export default function ViewerApp() {
   async function handleSaveAdminConfig() {
     const newConfig = { ...config, evento: `ev-${adminEventCode}`, evento_printer: `ev-${adminPrinterEventCode}` }
     
-    // IMPORTANTE: Usar SIEMPRE los valores qu escribió el usuario en los inputs
-    // Si el input está vacío, mantener el valor anterior
+    // Usar valores del usuario o los anteriores
     const newTextos = {
       text_es: textos?.text_es || '¡Consigue tu foto del evento!',
       text_en: textos?.text_en || 'Get your event photo!',
@@ -259,34 +260,23 @@ export default function ViewerApp() {
     }
 
     console.log('Admin guardando:', { adminPrice1, adminPrice2, adminPrice3, newTextos })
+    setAdminError('')
 
-    // Actualizar estado inmediatamente
-    setConfig(newConfig)
-    setTextos(newTextos)
-    setAdminError('') // Limpiar errores previos
-    
-    // Guardar en servidor
     try {
       const saveResult = await saveConfig(newConfig, newTextos)
       console.log('Resultado de guardar:', saveResult)
-      setAdminError('✓ Precios guardados correctamente')
       
-      // Esperar 1 segundo y luego recargar config
-      setTimeout(() => {
-        try {
-          const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
-          console.log('Recargando config desde:', configUrl)
-          fetch(configUrl)
-            .then(r => r.json())
-            .then(freshConfig => {
-              console.log('Config recargada del servidor:', freshConfig.textos)
-              setTextos(freshConfig.textos || newTextos)
-            })
-            .catch(e => console.error('Error en reload de config:', e))
-        } catch (e) {
-          console.error('Error al recargar config:', e)
-        }
-      }, 500)
+      // Actualizar estado con los valores que devuelve el servidor
+      if (saveResult.textos) {
+        setTextos(saveResult.textos)
+        // Limpiar localStorage para que precios viejos no sobreescriban los nuevos al recargar
+        localStorage.removeItem('printbox_viewer_state')
+      }
+      if (saveResult.config) {
+        setConfig(saveResult.config)
+      }
+      
+      setAdminError('✓ Precios guardados correctamente')
     } catch (e) {
       console.error('Error guardando config:', e.message)
       setAdminError('Error guardando precios: ' + e.message)
