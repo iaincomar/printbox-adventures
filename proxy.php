@@ -64,6 +64,18 @@ function getConfigDir() {
     return __DIR__ . '/config';
 }
 
+function getTextosFile($configDir, $eventCode = '') {
+    // Si hay un código de evento, usar archivo específico del evento
+    // Ejemplo: eventCode "1668042" → "textos_1668042.txt"
+    // Si no hay eventCode, usar archivo global "textos.txt" (backward compatibility)
+    if ($eventCode && trim($eventCode) !== '') {
+        // Sanitizar el eventCode para evitar directory traversal
+        $eventCode = preg_replace('/[^0-9a-zA-Z_-]/', '', $eventCode);
+        return $configDir . '/textos_' . $eventCode . '.txt';
+    }
+    return $configDir . '/textos.txt';
+}
+
 function getCsrfToken() {
     global $PRINTBOX_BASE, $cookiePath;
     $ch = curl_init($PRINTBOX_BASE . '/sanctum/csrf-cookie');
@@ -146,6 +158,10 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     clearstatcache(true);
     
     $configDir = getConfigDir();
+    
+    // Obtener el código de evento del query string (para cargar precios específicos de cada evento)
+    $eventCode = $_GET['eventCode'] ?? '';
+    
     $config = [
         'servidor'  => 'http://gestion.printboxweb.com',
         'evento'    => '', 'timer' => 5, 'impresora' => '', 'delay' => 5,
@@ -166,7 +182,8 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
         }
     }
 
-    $textosFile = $configDir . '/textos.txt';
+    // Usar getTextosFile() para obtener el archivo correcto (específico de evento o global)
+    $textosFile = getTextosFile($configDir, $eventCode);
     if (file_exists($textosFile)) {
         $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         
@@ -196,7 +213,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     exit();
 }
 
-// ── /config POST ── (igual que antes) ──
+// ── /config POST ──
 if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     // Headers anti-cache
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -212,6 +229,9 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Obtener el código de evento del query string (para guardar precios específicos de cada evento)
+    $eventCode = $_GET['eventCode'] ?? '';
+    
     $writeErrors = [];
 
     if (isset($data['config'])) {
@@ -227,13 +247,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if (isset($data['textos'])) {
         $t = $data['textos'];
-        $textosFile = $configDir . '/textos.txt';
         
-        // Log para debuggear
-        @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /config textos: " . json_encode($t) . "\n", FILE_APPEND);
-        
-        // Crear el contenido directamente usando SOLO los valores que llegaron
-        // Sin hacer defaults aquí - si está vacío, mantener lo que había
         $finalTextos = [
             'text_es' => $t['text_es'] ?? '¡Consigue tu foto del evento!',
             'text_en' => $t['text_en'] ?? 'Get your event photo!',
@@ -256,9 +270,28 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'empresa:' . $finalTextos['empresa'],
         ]);
         
-        // Escribir reemplazando completamente el archivo
-        $success = file_put_contents($textosFile, $content, LOCK_EX);
-        if ($success === false) $writeErrors[] = 'No se pudo escribir textos.txt';
+        // Log para debuggear
+        @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /config eventCode: " . $eventCode . " textos: " . json_encode($t) . "\n", FILE_APPEND);
+        
+        // IMPORTANTE: Cada evento debe tener precios INDEPENDIENTES
+        // Si hay eventCode → guardar SOLO en textos_<eventCode>.txt (aislado)
+        // Si NO hay eventCode → guardar en textos.txt (global/default)
+        // Esto evita que cambios en un evento afecten a otros eventos
+        $filesToWrite = [];
+        
+        if ($eventCode && trim($eventCode) !== '') {
+            // Guardar SOLO en archivo específico del evento
+            $filesToWrite[] = getTextosFile($configDir, $eventCode);
+        } else {
+            // Si no hay eventCode, guardar en global (defaults)
+            $filesToWrite[] = $configDir . '/textos.txt';
+        }
+        
+        // Escribir en el archivo correspondiente
+        foreach ($filesToWrite as $file) {
+            $success = file_put_contents($file, $content, LOCK_EX);
+            if ($success === false) $writeErrors[] = 'No se pudo escribir ' . basename($file);
+        }
     }
 
     if (count($writeErrors) > 0) {
@@ -268,8 +301,9 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     // Limpiar caché de PHP antes de releer
+    $textosFile = getTextosFile($configDir, $eventCode);
     clearstatcache(true, $configDir . '/servidor_api.txt');
-    clearstatcache(true, $configDir . '/textos.txt');
+    clearstatcache(true, $textosFile);
 
     // Leer y devolver los valores actualizados inmediatamente
     $config = ['servidor' => 'http://gestion.printboxweb.com', 'evento' => '', 'timer' => 5, 'impresora' => '', 'delay' => 5];
@@ -293,7 +327,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    $textosFile = $configDir . '/textos.txt';
+    $textosFile = getTextosFile($configDir, $eventCode);
     if (file_exists($textosFile)) {
         $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if ($lines) {

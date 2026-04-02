@@ -150,12 +150,29 @@ export default function ViewerApp() {
 
   useEffect(() => {
     const saved = loadViewerState()
+    
+    // Si hay evento guardado, cargar precios específicos de ese evento
+    const eventoFromStorage = saved?.config?.evento
+    const eventCode = eventoFromStorage ? eventoFromStorage.replace('ev-', '') : ''
+    const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
+    const configUrlWithEvent = eventCode ? `${configUrl}?eventCode=${encodeURIComponent(eventCode)}` : configUrl
 
     Promise.all([
-      fetch(BACKEND === '/' ? '/config' : `${BACKEND}/config`).then(r => r.json()),
+      fetch(configUrlWithEvent).then(r => r.json()),
       fetch(BACKEND === '/' ? '/print/count' : `${BACKEND}/print/count`).then(r => r.json()).catch(() => ({ count: 0 })),
     ]).then(([d, c]) => {
-      const mergedConfig = { ...(d.config || {}), ...(saved?.config || {}) }
+      // IMPORTANTE: No usar evento del servidor para viewer/mobile
+      // El evento es específico del usuario y debe venir de localStorage o ser ingresado por el usuario
+      // Solo usar precios/textos del servidor
+      const mergedConfig = { 
+        servidor: d.config?.servidor || 'http://gestion.printboxweb.com',
+        timer: d.config?.timer || 5,
+        impresora: d.config?.impresora || '',
+        delay: d.config?.delay || 5,
+        evento: saved?.config?.evento || '',  // Solo del localStorage, nunca del servidor
+        evento_printer: saved?.config?.evento_printer || '',
+      }
+      
       // El servidor siempre tiene prioridad sobre localStorage para precios/textos.
       // localStorage solo actúa como fallback si el servidor no devuelve un campo.
       const mergedTextos = { 
@@ -259,11 +276,12 @@ export default function ViewerApp() {
       empresa: textos?.empresa || 'PrintboxAdventures',
     }
 
-    console.log('Admin guardando:', { adminPrice1, adminPrice2, adminPrice3, newTextos })
+    console.log('Admin guardando para evento:', adminEventCode, { adminPrice1, adminPrice2, adminPrice3, newTextos })
     setAdminError('')
 
     try {
-      const saveResult = await saveConfig(newConfig, newTextos)
+      // Pasar el código de evento al guardar - cada evento tiene sus propios precios
+      const saveResult = await saveConfig(newConfig, newTextos, adminEventCode)
       console.log('Resultado de guardar:', saveResult)
       
       // Actualizar estado con los valores que devuelve el servidor
@@ -544,6 +562,16 @@ export default function ViewerApp() {
         <div className="modal d-block event-modal-overlay" tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark border border-secondary event-modal">
+              <button
+                type="button"
+                className="btn-close btn-close-white position-absolute"
+                style={{ top: '10px', right: '10px', zIndex: 10 }}
+                onClick={() => {
+                  setShowAdminModal(false)
+                  setAdminPassword('')
+                  setAdminError('')
+                }}
+              />
               <div className="modal-body text-center p-4 p-md-5">
                 <img src="/assets/ic_launcher.png" alt="Logo" className="event-modal-logo" />
                 <h4 className="event-modal-title">Panel de Administración</h4>

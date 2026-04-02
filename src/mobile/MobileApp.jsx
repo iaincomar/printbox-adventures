@@ -233,20 +233,24 @@ export default function MobileApp() {
       }
     }
 
+    // Cargar config global al iniciar (backward compatibility)
     getConfig().then(d => {
       if (d.textos) applyTextos(d.textos)
     }).catch(() => { })
   }, [])
 
-  // Refrescar precios del config cada 5 segundos (síntesis con admin)
+  // Refrescar precios del config cada 5 segundos (sincronización con admin)
+  // Si hay eventCode, cargar precios específicos de ese evento
+  // Si no, cargar config global
   useEffect(() => {
     const interval = setInterval(() => {
-      getConfig().then(d => {
+      // Pasar el código de evento si está disponible, para cargar precios específicos de ese evento
+      getConfig(eventCode || undefined).then(d => {
         if (d.textos) applyTextos(d.textos)
       }).catch(() => {})
     }, 5000)
     return () => clearInterval(interval)
-  }, [])
+  }, [eventCode])
 
   // Inicializar Square en el paso de pedido
   useEffect(() => {

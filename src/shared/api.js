@@ -78,8 +78,11 @@ export async function printJob({ imageUrl, imageName, printer, delay = 5 }) {
   return res.json()
 }
 
-export async function getConfig() {
-  const url = `${BACKEND_URL}/config`
+export async function getConfig(eventCode = '') {
+  // Si eventCode se proporciona, cargar config específica de ese evento
+  // Si no, cargar config global (para compatibilidad)
+  const queryParam = eventCode ? `?eventCode=${encodeURIComponent(eventCode)}` : ''
+  const url = `${BACKEND_URL}/config/${queryParam}`
   try {
     const res = await fetch(url)
     if (!res.ok) {
@@ -133,11 +136,14 @@ export async function getConfig() {
   }
 }
 
-export async function saveConfig(config, textos) {
+export async function saveConfig(config, textos, eventCode = '') {
+  // Si eventCode se proporciona, guardar config específica de ese evento
+  // Si no, guardar config global (para compatibilidad)
   // IMPORTANTE: usar /config/ con barra final para evitar redirect 301 de Apache.
   // Sin la barra, Apache redirige /config → /config/ y el redirect convierte POST en GET,
   // perdiendo el body (los precios llegan vacíos al servidor).
-  const url = `${BACKEND_URL}/config/`
+  const queryParam = eventCode ? `?eventCode=${encodeURIComponent(eventCode)}` : ''
+  const url = `${BACKEND_URL}/config/${queryParam}`
   try {
     const res = await fetch(url, {
       method: 'POST',
