@@ -423,12 +423,14 @@ export default function ViewerApp() {
   // Fotos para la página actual (20 por página)
   const currentPhotos = allPhotos
 
-  // Autoplay: cambiar página automáticamente cada 5 segundos si está activado
+  // Autoplay: cambiar página automáticamente cada 15 segundos si está activado
+  // (Aumentado a 15s para dar tiempo a cargar todas las imágenes y evitar sobrecargar el servidor)
+  // + proxy.php con reintentos automáticos ayuda a recuperarse de fallos
   useInterval(
     () => {
       setCurrentPage(p => (p < lastPage ? p + 1 : 1))
     },
-    autoplay ? 5000 : null
+    autoplay ? 15000 : null
   )
 
   // ============================================
@@ -942,7 +944,7 @@ export default function ViewerApp() {
           <button
             className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'} bg-dark border-success`}
             onClick={() => setAutoplay(!autoplay)}
-            title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (5s por página)'}
+            title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (15s por página)'}
           >
             <i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />
             {autoplay ? 'Autoplay ON' : 'Autoplay OFF'}
@@ -1100,22 +1102,56 @@ export default function ViewerApp() {
 // ============================================
 function PhotoCard({ photo, onSelect }) {
   const thumb = fixImageUrl(photo.uri || photo.uri_full)
+  const [imageError, setImageError] = React.useState(false)
+  const [retryCount, setRetryCount] = React.useState(0)
+  const maxRetries = 3
+
+  const handleImageError = () => {
+    if (retryCount < maxRetries) {
+      // Reintentar con un delay exponencial (1s, 2s, 3s)
+      setTimeout(() => {
+        setRetryCount(retryCount + 1)
+        setImageError(false)
+      }, (retryCount + 1) * 1000)
+    } else {
+      // Después de 3 reintentos, mostrar error
+      setImageError(true)
+    }
+  }
+
   return (
     <button
       className="viewer-photo-card btn p-0 w-100 border-2 rounded-3 overflow-hidden position-relative"
       onClick={() => onSelect(photo)}
       style={{ aspectRatio: '3/4' }}
     >
-      <img
-        src={thumb}
-        alt=""
-        className="w-100 h-100"
-        style={{ objectFit: 'cover' }}
-        draggable={false}
-        onContextMenu={(e) => e.preventDefault()}
-        onDragStart={(e) => e.preventDefault()}
-        onError={(e) => e.target.style.display = 'none'}
-      />
+      {imageError ? (
+        <div style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#f0f0f0',
+          color: '#999',
+          fontSize: '12px'
+        }}>
+          Error cargando
+        </div>
+      ) : (
+        <img
+          key={`${thumb}-${retryCount}`}
+          src={thumb}
+          alt=""
+          className="w-100 h-100"
+          style={{ objectFit: 'cover' }}
+          loading="lazy"
+          draggable={false}
+          onContextMenu={(e) => e.preventDefault()}
+          onDragStart={(e) => e.preventDefault()}
+          onError={handleImageError}
+        />
+      )}
       <div className="viewer-photo-hint">
         <i className="bi bi-printer me-1" /> Imprimir
       </div>

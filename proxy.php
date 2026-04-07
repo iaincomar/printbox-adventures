@@ -459,29 +459,57 @@ if (strpos($uri, '/printbox/') === 0) {
     }
 }
 
-// ── Proxy de imágenes (con HTTP) ──
+// ── Proxy de imágenes (con HTTP + Reintentos + Caché) ──
 if (strpos($uri, '/proxy-image/') === 0) {
     $imagePath = substr($uri, strlen('/proxy-image'));
     $imageUrl  = 'http://gestion.printboxweb.com' . $imagePath; // forzamos HTTP
 
-    $ch = curl_init($imageUrl);
-    curl_setopt_array($ch, [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => false,
-        CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    ]);
-    $imageData   = curl_exec($ch);
-    $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
-    curl_close($ch);
+    // Headers de caché agresivo (imágenes son estáticas)
+    header('Cache-Control: public, max-age=31536000, immutable');
+    header('Pragma: cache');
+    header('Expires: ' . date('r', strtotime('+1 year')));
 
-    if ($imageData) {
+    // Reintentos con backoff exponencial
+    $maxRetries = 3;
+    $imageData = null;
+    $contentType = 'application/octet-stream';
+    
+    for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+        $ch = curl_init($imageUrl);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_SSL_VERIFYPEER => false,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_TIMEOUT        => 20 + ($attempt * 5), // Aumentar timeout en cada reintento
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            CURLOPT_FAILONERROR    => false, // No fallar silenciosamente
+        ]);
+        $imageData   = curl_exec($ch);
+        $httpCode    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $contentType = curl_getinfo($ch, CURLINFO_CONTENT_TYPE) ?: 'application/octet-stream';
+        $curlError   = curl_error($ch);
+        curl_close($ch);
+
+        // Si éxito (código 200), salir del loop de reintentos
+        if ($httpCode === 200 && $imageData) {
+            break;
+        }
+
+        // Si fallo y no es el último intento, esperar antes de reintentar
+        if ($attempt < $maxRetries) {
+            $backoffMs = 500 * ($attempt); // 500ms, 1s, 1.5s
+            usleep($backoffMs * 1000);
+        }
+    }
+
+    if ($imageData && $httpCode === 200) {
         header('Content-Type: ' . $contentType);
         echo $imageData;
     } else {
-        http_response_code(404);
-        echo json_encode(['error' => 'Imagen no encontrada']);
+        http_response_code(503); // 503 en lugar de 404, así el navegador lo reintentará
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Imagen no disponible', 'attempt' => $attempt]);
     }
     exit();
 }
