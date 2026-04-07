@@ -108,7 +108,7 @@ function createSplash() {
 </style></head>
 <body>
   <img src="file://${logoPath.replace(/\\/g,'/')}" alt="logo" onerror="this.style.display='none'">
-  <h1>PrintboxAdventures</h1>
+  <h1>Printbox Adventure</h1>
   <p>Iniciando sistema...</p>
   <div class="bar-wrap"><div class="bar"></div></div>
 </body></html>`
@@ -119,7 +119,7 @@ function createSplash() {
 // ── CREAR VENTANAS ────────────────────────────────────────────────────────────
 function createWindows() {
   viewerWin = new BrowserWindow({
-    title: 'PrintboxAdventures — Visor de Evento',
+    title: 'Printbox Adventure — Visor de Evento',
     backgroundColor: '#0a0a0f',
     fullscreen: true,
     kiosk: true,
@@ -134,7 +134,7 @@ function createWindows() {
   printerWin = new BrowserWindow({
     width: 1200,
     height: 750,
-    title: 'PrintboxAdventures — Panel de Control',
+    title: 'Printbox Adventure — Panel de Control',
     backgroundColor: '#0a0a0f',
     autoHideMenuBar: true,
     webPreferences: {
@@ -172,7 +172,7 @@ function createWindows() {
       e.preventDefault()
       printerWin.hide()
       tray?.displayBalloon?.({
-        title: 'PrintboxAdventures',
+        title: 'Printbox Adventure',
         content: 'La app sigue corriendo en la bandeja del sistema.',
         iconType: 'info',
       })
@@ -211,7 +211,7 @@ function createTray() {
 
   const icon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 })
   tray = new Tray(icon)
-  tray.setToolTip('PrintboxAdventures')
+  tray.setToolTip('Printbox Adventure')
 
   const menu = Menu.buildFromTemplate([
     { label: 'Mostrar Panel de Control', click: () => { printerWin?.show(); printerWin?.focus() } },

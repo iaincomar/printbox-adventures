@@ -5,4 +5,4 @@ de:Hol dir dein Foto!
 precio1:5
 precio2:9
 precio3:12
-empresa:PrintboxAdventures
+empresa:Printbox Adventur

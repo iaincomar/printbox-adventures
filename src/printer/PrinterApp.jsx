@@ -428,7 +428,7 @@ export default function PrinterApp() {
         <div className="d-flex align-items-center gap-3">
           <img src="/assets/MoscaPrintbox.png" alt="Logo" className="printer-logo" />
           <div>
-            <div className="printer-title">PrintboxAdventures</div>
+            <div className="printer-title">Printbox Adventure</div>
             <div className="printer-version text-secondary d-flex align-items-center gap-2">
               Panel de Control
               <span className="badge border border-secondary text-secondary fw-normal">

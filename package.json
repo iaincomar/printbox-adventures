@@ -1,7 +1,7 @@
 {
   "name": "printbox-adventures",
   "version": "1.0.6",
-  "description": "PrintboxAdventures - Sistema de impresión de fotos para eventos",
+  "description": "Printbox Adventure - Sistema de impresión de fotos para eventos",
   "author": "Alejandro",
   "main": "electron/main.js",
   "scripts": {
@@ -37,7 +37,7 @@
   },
   "build": {
     "appId": "com.printbox.adventures",
-    "productName": "PrintboxAdventures",
+    "productName": "Printbox Adventure",
     "directories": {
       "output": "dist-electron"
     },

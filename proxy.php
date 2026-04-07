@@ -256,7 +256,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
             'precio1' => $t['precio1'] ?? '5',
             'precio2' => $t['precio2'] ?? '9',
             'precio3' => $t['precio3'] ?? '12',
-            'empresa' => $t['empresa'] ?? 'PrintboxAdventures',
+            'empresa' => $t['empresa'] ?? 'Printbox Adventur',
         ];
         
         $content = implode("\n", [
@@ -398,7 +398,7 @@ if ($uri === '/reset-config' || $uri === '/reset-config/') {
         mkdir($configDir, 0755, true);
     }
     
-    $defaultContent = "es:¡Consigue tu foto del evento!\nen:Get your event photo!\nfr:Obtenez votre photo!\nde:Hol dir dein Foto!\nprecio1:5\nprecio2:9\nprecio3:12\nempresa:PrintboxAdventures";
+    $defaultContent = "es:¡Consigue tu foto del evento!\nen:Get your event photo!\nfr:Obtenez votre photo!\nde:Hol dir dein Foto!\nprecio1:5\nprecio2:9\nprecio3:12\nempresa:Printbox Adventure";
     
     file_put_contents($configDir . '/textos.txt', $defaultContent);
     @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " RESET /reset-config\n", FILE_APPEND);

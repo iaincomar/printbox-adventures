@@ -252,13 +252,13 @@ export default function MobileApp() {
     return () => clearInterval(interval)
   }, [eventCode])
 
-  // Inicializar Square en el paso de pedido
+  // Inicializar pasarela de pago en el paso de pedido
   useEffect(() => {
     if (step !== STEP_ORDER) return
 
     const initSquare = async () => {
       if (!window.Square) {
-        setSquareError('Square SDK no cargado')
+        setSquareError('Pasarela de pago no cargada')
         return
       }
       try {
@@ -268,7 +268,7 @@ export default function MobileApp() {
         setSquareCard(card)
         setSquareError('')
       } catch (e) {
-        setSquareError(e.message || 'Error inicializando Square')
+        setSquareError(e.message || 'Error inicializando pasarela de pago')
       }
     }
 
@@ -277,7 +277,7 @@ export default function MobileApp() {
 
   const handleSquarePayment = async () => {
     if (!squareCard) {
-      setSquareError('Square no inicializado')
+      setSquareError('Pasarela de pago no inicializada')
       return
     }
     setSquareLoading(true)
@@ -750,7 +750,7 @@ export default function MobileApp() {
       return (
         <div className="mobile-app event-container">
           <img src="/assets/ic_launcher.png" alt="Logo" className="event-logo" />
-          <h1 className="event-title">PrintboxAdventures</h1>
+          <h1 className="event-title">Printbox Adventure</h1>
           <p className="event-subtitle">Cargando evento...</p>
           <div className="d-flex justify-content-center">
             <span className="spinner-border text-warning" style={{ width: '3rem', height: '3rem' }} />
@@ -763,7 +763,7 @@ export default function MobileApp() {
     return (
       <div className="mobile-app event-container">
         <img src="/assets/ic_launcher.png" alt="Logo" className="event-logo" />
-        <h1 className="event-title">PrintboxAdventures</h1>
+        <h1 className="event-title">Printbox Adventur</h1>
         <p className="event-subtitle">Introduce el código del evento</p>
 
         <div className="event-input-wrapper">
@@ -816,7 +816,7 @@ export default function MobileApp() {
               🇬🇧 Choose your photos to print
             </div>
           </div>
-          <button className="btn btn-sm btn-outline-warning" title="Información de privacidad" style={{ fontSize: '18px', padding: '2px 6px' }} onClick={() => alert('Tus fotos están protegidas. No se guardan datos personales.')}>
+          <button className="btn btn-sm btn-outline-warning" title="Términos y condiciones" style={{ fontSize: '18px', padding: '2px 6px' }} onClick={() => alert('Tus fotos están protegidas.\n\nNo almacenamos datos personales.')}>
             <i className="bi bi-info-circle" />
           </button>
         </div>
@@ -1053,7 +1053,7 @@ export default function MobileApp() {
 
           {/* Square Payment */}
           <div id="square-payment-section" className="p-3 bg-dark border rounded mt-3 w-100">
-            <h6 className="text-white text-center mb-3">Finalizar Pago Seguro</h6>
+            <h6 className="text-white text-center mb-3">Pago con Tarjeta de Crédito</h6>
             <div id="card-container" style={{ minHeight: '170px' }}></div>
             {squareError && <div className="text-danger text-center mt-2">{squareError}</div>}
             <button
@@ -1067,7 +1067,7 @@ export default function MobileApp() {
 
           <div className="alert alert-secondary order-payment-note">
             <i className="bi bi-credit-card text-warning" />
-            El pago se realizará con tarjeta, Google Pay, etc. desde el móvil
+            Pago seguro con tarjeta de crédito, Google Pay o Apple Pay
           </div>
         </div>
 
@@ -1104,9 +1104,9 @@ export default function MobileApp() {
         <div className="success-icon">🎉</div>
         <h2 className="success-title">¡Pedido enviado!</h2>
         <p className="success-text">
-          Tu pedido ha sido enviado. El pago se realizará con tarjeta, Google Pay, etc. desde el móvil.
+          Tu pedido ha sido enviado. Tus fotos se imprimirán en breve.
         </p>
-        <p className="success-small-text">Tus fotos se imprimirán en breve.</p>
+        <p className="success-small-text">¡Gracias por tu compra!</p>
 
         <button
           className="btn btn-outline-warning back-button"

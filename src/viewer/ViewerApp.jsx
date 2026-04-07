@@ -186,7 +186,7 @@ export default function ViewerApp() {
         precio1: '5', 
         precio2: '9', 
         precio3: '12', 
-        empresa: 'PrintboxAdventures',
+        empresa: 'Printbox Adventure',
         ...(saved?.textos || {}),  // localStorage como base de fallback
         ...(d.textos || {}),       // servidor siempre sobreescribe
       }
@@ -280,7 +280,7 @@ export default function ViewerApp() {
       precio1: adminPrice1 && adminPrice1.trim() !== '' ? adminPrice1 : (textos?.precio1 || '5'),
       precio2: adminPrice2 && adminPrice2.trim() !== '' ? adminPrice2 : (textos?.precio2 || '9'),
       precio3: adminPrice3 && adminPrice3.trim() !== '' ? adminPrice3 : (textos?.precio3 || '12'),
-      empresa: textos?.empresa || 'PrintboxAdventures',
+      empresa: textos?.empresa || 'Printbox Adventure',
     }
 
     console.log('Admin guardando para evento:', adminEventCode, { adminPrice1, adminPrice2, adminPrice3, newTextos })
@@ -394,12 +394,12 @@ export default function ViewerApp() {
     })
   }, [loadAllPhotos, currentPage])
 
-  // Inicializar Square cuando se muestra modal de pago y se selecciona Square
+  // Inicializar Square cuando se muestra modal de pago y se selecciona Tarjeta
   useEffect(() => {
     if (showPayment && paymentMethod === 'square') {
       const initSquare = async () => {
         if (!window.Square) {
-          setSquareError('Square SDK no cargado')
+          setSquareError('Pasarela de pago no cargada')
           return
         }
         try {
@@ -409,7 +409,7 @@ export default function ViewerApp() {
           setSquareCard(card)
           setSquareError('')
         } catch (e) {
-          setSquareError(e.message || 'Error inicializando Square')
+          setSquareError(e.message || 'Error inicializando pasarela de pago')
         }
       }
       initSquare()
@@ -765,7 +765,7 @@ export default function ViewerApp() {
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content bg-dark border border-secondary">
               <div className="modal-header border-secondary">
-                <h5 className="modal-title text-light">Política de Privacidad</h5>
+                <h5 className="modal-title text-light">Términos y Condiciones</h5>
                 <button type="button" className="btn-close btn-close-white" onClick={() => setShowPrivacyModal(false)}></button>
               </div>
               <div className="modal-body p-4" style={{ maxHeight: '60vh', overflowY: 'auto' }}>
@@ -870,7 +870,7 @@ export default function ViewerApp() {
                                 className={`btn ${paymentMethod === 'square' ? 'btn-warning text-dark' : 'btn-outline-light'}`}
                                 onClick={() => setPaymentMethod('square')}
                               >
-                                <i className="bi bi-credit-card me-1" /> Square
+                                <i className="bi bi-credit-card me-1" /> Tarjeta
                               </button>
                               <button
                                 className={`btn ${paymentMethod === 'coupon' ? 'btn-warning text-dark' : 'btn-outline-light'}`}
@@ -963,10 +963,10 @@ export default function ViewerApp() {
           <button
             className="btn btn-sm btn-outline-light bg-dark border-light"
             onClick={() => setShowPrivacyModal(true)}
-            title="Política de privacidad"
+            title="Términos y condiciones"
           >
             <i className="bi bi-info-circle me-1" />
-            Privacidad
+            Términos
           </button>
 
           {/* Botón de admin */}

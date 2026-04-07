@@ -105,7 +105,7 @@ export async function getConfig(eventCode = '') {
           precio1: '5',
           precio2: '9',
           precio3: '12',
-          empresa: 'PrintboxAdventures',
+          empresa: 'Printbox Adventur',
         },
       }
     }
@@ -130,7 +130,7 @@ export async function getConfig(eventCode = '') {
         precio1: '5',
         precio2: '9',
         precio3: '12',
-        empresa: 'PrintboxAdventures',
+        empresa: 'Printbox Adventur',
       },
     }
   }
