@@ -486,12 +486,12 @@ if (strpos($uri, '/proxy-image/') === 0) {
     exit();
 }
 
-// Ruta: /proxy.php?route=process-payment
-if ($_GET['route'] === 'process-payment') {
+// ── /process-payment (Square payment processing) ──
+if ($uri === '/process-payment') {
     $data = json_decode(file_get_contents('php://input'), true);
 
     $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
-    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LPMZR4EC495TD';
+    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
 
     $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
     $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
@@ -512,7 +512,59 @@ if ($_GET['route'] === 'process-payment') {
         "location_id" => $location
     ]);
 
-    $url = "https://connect.squareupsandbox.com/v2/payments";
+    // Log de petición para debuggear
+    $configDir = getConfigDir();
+    @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /process-payment Request: " . $payload . "\n", FILE_APPEND);
+
+    $url = "https://connect.squareup.com/v2/payments";
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $SQUARE_ACCESS_TOKEN,
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    // Log de respuesta de Square para debuggear
+    @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /process-payment Response: HTTP $httpCode " . substr($response, 0, 500) . "\n", FILE_APPEND);
+
+    http_response_code($httpCode ?: 500);
+    echo $response;
+    exit();
+}
+
+// Ruta antigua: /proxy.php?route=process-payment (deprecated, kept for backward compatibility)
+if ($_GET['route'] === 'process-payment') {
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
+    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
+
+    $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
+    $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
+
+    if (!$data['token'] || $amount <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'token y amount son requeridos']);
+        exit;
+    }
+
+    $payload = json_encode([
+        "source_id" => $data['token'],
+        "idempotency_key" => uniqid('pba_', true),
+        "amount_money" => [
+            "amount" => $amount,
+            "currency" => ($data['currency'] ?? 'EUR')
+        ],
+        "location_id" => $location
+    ]);
+
+    $url = "https://connect.squareup.com/v2/payments";
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
         'Authorization: Bearer ' . $SQUARE_ACCESS_TOKEN,
@@ -528,7 +580,7 @@ if ($_GET['route'] === 'process-payment') {
 
     http_response_code($httpCode ?: 500);
     echo $response;
-    exit;
+    exit();
 }
 
 http_response_code(404);

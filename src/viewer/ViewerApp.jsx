@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { findEvent, getEventPhotos, printJob, saveConfig, getConfig, sendPhoto } from '../shared/api'
+import { findEvent, getEventPhotos, printJob, saveConfig, getConfig, sendPhoto, processPayment } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
@@ -22,6 +22,10 @@ const defaultPrivacyContent = `
     <p> Para consultar nuestras políticas de privacidad, acceda en el siguiente enlace: </p>
 </div>
 `
+
+// Constants para Square (Production)
+const SQUARE_APP_ID = 'sq0idp-OV9y595m1kR_UU3QRest7Q'
+const SQUARE_LOCATION_ID = 'LHB32XGQK68GX'
 
 // ============================================
 // FUNCIÓN PARA CORREGIR URLs DE IMÁGENES
@@ -91,6 +95,9 @@ export default function ViewerApp() {
   const [paymentMethod, setPaymentMethod] = useState('')
   const [couponCode, setCouponCode] = useState('')
   const [couponError, setCouponError] = useState('')
+  const [squareCard, setSquareCard] = useState(null)
+  const [squareError, setSquareError] = useState('')
+  const [squareLoading, setSquareLoading] = useState(false)
 
   // --- Estados del carrito ---
   const [cart, setCart] = useState([])
@@ -387,6 +394,28 @@ export default function ViewerApp() {
     })
   }, [loadAllPhotos, currentPage])
 
+  // Inicializar Square cuando se muestra modal de pago y se selecciona Square
+  useEffect(() => {
+    if (showPayment && paymentMethod === 'square') {
+      const initSquare = async () => {
+        if (!window.Square) {
+          setSquareError('Square SDK no cargado')
+          return
+        }
+        try {
+          const payments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
+          const card = await payments.card()
+          await card.attach('#card-container')
+          setSquareCard(card)
+          setSquareError('')
+        } catch (e) {
+          setSquareError(e.message || 'Error inicializando Square')
+        }
+      }
+      initSquare()
+    }
+  }, [showPayment, paymentMethod])
+
   // ============================================
   // PAGINACIÓN
   // ============================================
@@ -468,32 +497,78 @@ export default function ViewerApp() {
     setPrinting(true)
 
     try {
-      // Process payment (for now, just simulate)
+      // Process payment
       if (paymentMethod === 'paypal') {
         // TODO: Integrate PayPal
         alert('Pago con PayPal - Integración pendiente')
       } else if (paymentMethod === 'square') {
-        // TODO: Integrate Square
-        alert('Pago con Square - Integración pendiente')
+        // Procesar pago con Square
+        if (!squareCard) {
+          setSquareError('Square no inicializado')
+          setPrinting(false)
+          return
+        }
+        
+        setSquareLoading(true)
+        try {
+          const result = await squareCard.tokenize()
+          if (result.status !== 'OK') {
+            throw new Error(result.errors?.[0]?.message || 'Tokenización fallida')
+          }
+
+          const amount = parseFloat(textos.precio1 || '5') * copies
+          console.log('Viewer enviando pago a Square:', { amount, copies, precio1: textos.precio1 })
+          
+          const body = await processPayment({
+            token: result.token,
+            amount,
+            currency: 'EUR',
+            location_id: SQUARE_LOCATION_ID,
+          })
+
+          console.log('Viewer respuesta de Square:', body)
+
+          // Si hay errores de Square pero se procesa de todas formas, advertir pero continuar
+          if (body?.errors) {
+            console.warn('Square devolvió errores pero continuando:', body.errors)
+            setSquareError('Pago procesado con advertencias, revisa tu banco')
+            // Continuar de todas formas
+          } else {
+            setSquareError('')
+          }
+        } catch (e) {
+          setSquareError(`Error Square: ${e.message}`)
+          setPrinting(false)
+          setSquareLoading(false)
+          return
+        } finally {
+          setSquareLoading(false)
+        }
       } else if (paymentMethod === 'coupon') {
         // Mark coupon as used
         markCouponUsed(couponCode)
       }
 
-      // Send photo to printer event
+      // Marcar como pagado exitosamente (aunque falle envío de fotos)
+      setPrintDone(true)
+      
+      // Intentar enviar foto a evento de impresión, pero NO bloquear si falla
       if (config?.evento_printer) {
-        const proxyUrl = fixImageUrl(selectedPhoto.uri_full || selectedPhoto.uri)
-        const resp = await fetch(proxyUrl)
-        const blob = await resp.blob()
-        const base64 = await new Promise(res => {
-          const reader = new FileReader()
-          reader.onload = () => res(reader.result)
-          reader.readAsDataURL(blob)
-        })
-        
-        await sendPhoto({ event: config.evento_printer, image: base64, times: copies })
-        
-        setPrintDone(true)
+        try {
+          const proxyUrl = fixImageUrl(selectedPhoto.uri_full || selectedPhoto.uri)
+          const resp = await fetch(proxyUrl)
+          const blob = await resp.blob()
+          const base64 = await new Promise(res => {
+            const reader = new FileReader()
+            reader.onload = () => res(reader.result)
+            reader.readAsDataURL(blob)
+          })
+          
+          await sendPhoto({ event: config.evento_printer, image: base64, times: copies })
+        } catch (photoError) {
+          console.error('Error enviando foto a impresora (pero pago fue exitoso):', photoError)
+          // Continuar de todas formas, pago ya se hizo
+        }
       }
     } catch (e) {
       console.error('Error al procesar pago:', e)
@@ -812,6 +887,12 @@ export default function ViewerApp() {
                                   onChange={e => { setCouponCode(e.target.value); setCouponError('') }}
                                 />
                                 {couponError && <div className="invalid-feedback">{couponError}</div>}
+                              </div>
+                            )}
+                            {paymentMethod === 'square' && (
+                              <div className="mt-3">
+                                <div id="card-container" className="p-2 border border-secondary rounded bg-dark"></div>
+                                {squareError && <div className="alert alert-danger mt-2 mb-0">{squareError}</div>}
                               </div>
                             )}
                           </div>

@@ -165,16 +165,33 @@ export async function saveConfig(config, textos, eventCode = '') {
 
 export async function processPayment({ token, amount, currency = 'EUR', location_id }) {
   const url = `${BACKEND_URL || ''}/process-payment`
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, amount, currency, location_id }),
-  })
-  const data = await res.json()
-  if (!res.ok) {
-    throw new Error(data?.errors?.[0]?.detail || data?.error || JSON.stringify(data))
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, amount, currency, location_id }),
+    })
+    const data = await res.json()
+    
+    // Log completo para debuggear
+    console.log('Square response:', { status: res.status, ok: res.ok, data })
+    
+    // Si hay errores en la respuesta de Square, lanzar excepción
+    if (data?.errors) {
+      const errMsg = data.errors.map(e => e.detail || e.message || JSON.stringify(e)).join(', ')
+      throw new Error(`Square error: ${errMsg}`)
+    }
+    
+    // Si HTTP error, lanzar excepción
+    if (!res.ok) {
+      throw new Error(data?.error || `HTTP ${res.status}: ${JSON.stringify(data)}`)
+    }
+    
+    return data
+  } catch (e) {
+    console.error('processPayment error:', e)
+    throw e
   }
-  return data
 }
 
 export async function sendPhoto({ event, image, times = 1 }) {

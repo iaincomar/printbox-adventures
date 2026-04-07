@@ -2,7 +2,7 @@
 
 Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Python + tkinter a **React + Electron + Node.js Express**, con app web móvil incluida.
 
-**Versión actual:** 1.0.6
+**Versión actual:** 1.0.7 (Abril 2026)
 
 ---
 
@@ -561,6 +561,11 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ Pantalla carga QR | `mobile/MobileApp.jsx` | "Cargando evento..." amigable al acceder vía QR (Marzo 2026) |
 | ✅ Flujo simplificado mobile | `mobile/MobileApp.jsx` | Botón editar removido, sin "Hacer foto nueva", texto bilingüe (Marzo 2026) |
 | ✅ Pago mobile actualizado | `mobile/MobileApp.jsx` | Cambio de "datáfono" a "tarjeta, Google Pay, etc." (Marzo 2026) |
+| ✅ Pago integrado Square | `proxy.php`, `MobileApp.jsx`, `ViewerApp.jsx` | Payments API de Square/BBVA. Tokenización PCI-compliant (Abril 2026) |
+| ✅ Config independiente por evento | `proxy.php`, `api.js` | Cada evento guarda precios en archivo `textos_<eventCode>.txt` (Abril 2026) |
+| ✅ Admin evento independiente | `ViewerApp.jsx` | Admin puede cambiar precios específicos de cada evento sin afectar otros (Abril 2026) |
+| ✅ Flujo post-pago robusto | `MobileApp.jsx`, `ViewerApp.jsx` | Pago exitoso no se bloquea por error de envío de fotos (Abril 2026) |
+| ✅ Volver al evento después de pagar | `MobileApp.jsx` | Botón "Finalizar" vuelve a galería del evento, no a introducir código (Abril 2026) |
 
 ---
 
@@ -859,7 +864,7 @@ const getImageUrl = (url) => {
 - [ ] Versión visible en la app (header del Printer)
 - [ ] Notificación toast al imprimir
 - [ ] Sonido de confirmación al imprimir
-- [ ] Pago integrado (Google Pay, Stripe, etc.)
+- [x] Pago integrado (Square/BBVA) ✅ Abril 2026 - PRODUCTION
 
 ### Viewer
 - [x] QR dinámico con código de evento en la URL ✅ Marzo 2026
