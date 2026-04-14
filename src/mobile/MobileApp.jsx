@@ -49,6 +49,18 @@ const SQUARE_LOCATION_ID = 'LHB32XGQK68GX'
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
+
+/**
+ * Detecta el tipo de dispositivo basado en el user agent
+ * @returns {string} 'ios', 'android', o 'other'
+ */
+function detectDeviceType() {
+  const ua = navigator.userAgent
+  if (/iPad|iPhone|iPod/.test(ua)) return 'ios'
+  if (/Android/.test(ua)) return 'android'
+  return 'other'
+}
+
 export default function MobileApp() {
   // --- Estados del flujo ---
   const [step, setStep] = useState(STEP_EVENT)           // Paso actual
@@ -83,8 +95,12 @@ export default function MobileApp() {
   const [sending, setSending] = useState(false)          // Enviando pedido
   const [toast, setToast] = useState(null)               // Mensaje de toast
   const [squareCard, setSquareCard] = useState(null)     // Objeto Square card
+  const [squareApplePay, setSquareApplePay] = useState(null) // Objeto Square Apple Pay
+  const [squareGooglePay, setSquareGooglePay] = useState(null) // Objeto Square Google Pay
+  const [squarePayPal, setSquarePayPal] = useState(null) // Objeto Square PayPal
   const [squareError, setSquareError] = useState('')     // Error de Square
   const [squareLoading, setSquareLoading] = useState(false) // Pago Square en progreso
+  const [deviceType, setDeviceType] = useState('other')  // Tipo de dispositivo: 'ios', 'android', 'other'
 
   const applyTextos = (incoming) => {
     if (!incoming) return
@@ -188,6 +204,10 @@ export default function MobileApp() {
       root.style.overflow = 'auto'
       root.style.height = 'auto'
     }
+
+    // Detectar tipo de dispositivo
+    setDeviceType(detectDeviceType())
+
     return () => {
       // Limpiar estilos al desmontar
       document.documentElement.style.overflow = ''
@@ -261,11 +281,150 @@ export default function MobileApp() {
         setSquareError('Pasarela de pago no cargada')
         return
       }
+
+      // Helper para crear PaymentRequest
+      const createPaymentRequestData = () => {
+        const amountInCents = String(Math.round(parseFloat(totalPrice()) * 100))
+        return {
+          countryCode: 'ES',
+          currencyCode: 'EUR',
+          total: {
+            amount: amountInCents,
+            label: 'Compra',
+          },
+        }
+      }
+
       try {
         const payments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
-        const card = await payments.card()
-        await card.attach('#card-container')
-        setSquareCard(card)
+
+        // Inicializar tarjeta (siempre)
+        try {
+          const card = await payments.card()
+          await card.attach('#card-container')
+          setSquareCard(card)
+          console.log('✓ Tarjeta inicializada')
+        } catch (e) {
+          console.error('❌ Error tarjeta:', e.message)
+        }
+
+        // Inicializar Apple Pay
+        if (deviceType === 'ios') {
+          console.log('🍎 Intentando inicializar Apple Pay...')
+          try {
+            const applePay = await payments.applePay({
+              createPaymentRequest: createPaymentRequestData,
+            })
+            const appleContainer = document.getElementById('apple-pay-container')
+            console.log('🍎 Contenedor Apple Pay?', !!appleContainer)
+            
+            if (appleContainer) {
+              await applePay.attach('#apple-pay-container')
+              console.log('🍎 Apple Pay attached')
+              setSquareApplePay(applePay)
+              
+              // Listener para el evento de tokenización de Square
+              appleContainer.addEventListener('tokenization', async (e) => {
+                console.log('🍎 Tokenization event:', e.detail)
+                try {
+                  const { token, status } = e.detail || {}
+                  if (status === 'OK' && token) {
+                    await processSquarePayment(token, 'Apple Pay')
+                  } else {
+                    setSquareError('Apple Pay: Error en tokenización')
+                  }
+                } catch (err) {
+                  console.error('🍎 Apple Pay error:', err)
+                  setSquareError(`Apple Pay: ${err.message}`)
+                }
+              })
+              
+              console.log('✅ Apple Pay inicializado')
+            } else {
+              console.error('❌ Contenedor #apple-pay-container no encontrado')
+            }
+          } catch (e) {
+            console.warn('⚠️ Apple Pay no disponible:', e.message)
+          }
+        }
+
+        // Inicializar Google Pay
+        if (deviceType === 'android') {
+          console.log('🔵 Intentando inicializar Google Pay...')
+          try {
+            const paymentRequest = payments.paymentRequest(createPaymentRequestData())
+            const googlePay = await payments.googlePay(paymentRequest)
+            const googleContainer = document.getElementById('google-pay-container')
+            console.log('🔵 Contenedor Google Pay?', !!googleContainer)
+            
+            if (googleContainer) {
+              await googlePay.attach('#google-pay-container')
+              console.log('🔵 Google Pay attached')
+              setSquareGooglePay(googlePay)
+              
+              // Listener para el evento de tokenización de Square
+              googleContainer.addEventListener('tokenization', async (e) => {
+                console.log('🔵 Tokenization event:', e.detail)
+                try {
+                  const { token, status } = e.detail || {}
+                  if (status === 'OK' && token) {
+                    await processSquarePayment(token, 'Google Pay')
+                  } else {
+                    setSquareError('Google Pay: Error en tokenización')
+                  }
+                } catch (err) {
+                  console.error('🔵 Google Pay error:', err)
+                  setSquareError(`Google Pay: ${err.message}`)
+                }
+              })
+              
+              console.log('✅ Google Pay inicializado')
+            } else {
+              console.error('❌ Contenedor #google-pay-container no encontrado')
+            }
+          } catch (e) {
+            console.warn('⚠️ Google Pay no disponible:', e.message)
+          }
+        }
+
+        // Inicializar PayPal (disponible en todos los dispositivos)
+        console.log('💰 Intentando inicializar PayPal...')
+        try {
+          const paypal = await payments.paypal({
+            createPaymentRequest: createPaymentRequestData,
+          })
+          const paypalContainer = document.getElementById('paypal-container')
+          console.log('💰 Contenedor PayPal?', !!paypalContainer)
+          
+          if (paypalContainer) {
+            await paypal.attach('#paypal-container')
+            console.log('💰 PayPal attached')
+            setSquarePayPal(paypal)
+            
+            // Listener para el evento de tokenización de Square
+            paypalContainer.addEventListener('tokenization', async (e) => {
+              console.log('💰 PayPal tokenization event:', e.detail)
+              try {
+                const { token, status } = e.detail || {}
+                if (status === 'OK' && token) {
+                  await processSquarePayment(token, 'PayPal')
+                } else {
+                  setSquareError('PayPal: Error en tokenización')
+                }
+              } catch (err) {
+                console.error('💰 PayPal error:', err)
+                setSquareError(`PayPal: ${err.message}`)
+              }
+            })
+            
+            console.log('✅ PayPal inicializado')
+          } else {
+            console.error('❌ Contenedor #paypal-container no encontrado')
+          }
+        } catch (e) {
+          console.warn('⚠️ PayPal no disponible:', e.message)
+        }
+
         setSquareError('')
       } catch (e) {
         setSquareError(e.message || 'Error inicializando pasarela de pago')
@@ -287,12 +446,12 @@ export default function MobileApp() {
         throw new Error(result.errors?.[0]?.message || 'Tokenización fallida')
       }
 
-      const amount = parseFloat(totalPrice())
-      console.log('Enviando pago a Square:', { amount, currency: 'EUR', location_id: SQUARE_LOCATION_ID })
-      
+      const amountInCents = String(Math.round(parseFloat(totalPrice()) * 100))
+      console.log('Enviando pago a Square:', { amount: amountInCents, currency: 'EUR', location_id: SQUARE_LOCATION_ID })
+
       const body = await processPayment({
         token: result.token,
-        amount,
+        amount: amountInCents,
         currency: 'EUR',
         location_id: SQUARE_LOCATION_ID,
       })
@@ -318,6 +477,42 @@ export default function MobileApp() {
       setStep(STEP_SUCCESS)
     } catch (e) {
       setSquareError(`Error Square: ${e.message}`)
+    } finally {
+      setSquareLoading(false)
+    }
+  }
+
+  // Procesar pago desde Apple Pay o Google Pay
+  const processSquarePayment = async (token, methodName) => {
+    setSquareLoading(true)
+    try {
+      const amountInCents = String(Math.round(parseFloat(totalPrice()) * 100))
+      console.log(`Enviando pago a Square (${methodName}):`, { amount: amountInCents, currency: 'EUR', location_id: SQUARE_LOCATION_ID })
+
+      const body = await processPayment({
+        token,
+        amount: amountInCents,
+        currency: 'EUR',
+        location_id: SQUARE_LOCATION_ID,
+      })
+
+      console.log('Respuesta de Square:', body)
+
+      if (body?.errors) {
+        console.warn('Square devolvió errores pero continuando:', body.errors)
+        showToast('Pago procesado con advertencias, por favor revisa tu banco')
+      }
+
+      try {
+        await sendOrderPhotos()
+      } catch (photoError) {
+        console.error('Error enviando fotos:', photoError)
+        showToast('Pago completado. Las fotos se enviarán más tarde.')
+      }
+
+      setStep(STEP_SUCCESS)
+    } catch (e) {
+      setSquareError(`Error en ${methodName}: ${e.message}`)
     } finally {
       setSquareLoading(false)
     }
@@ -1053,8 +1248,20 @@ export default function MobileApp() {
 
           {/* Square Payment */}
           <div id="square-payment-section" className="p-3 bg-dark border rounded mt-3 w-100">
-            <h6 className="text-white text-center mb-3">Pago con Tarjeta de Crédito</h6>
+            <h6 className="text-white text-center mb-3">Seleccionar método de pago</h6>
+
+            {/* Apple Pay */}
+            <div id="apple-pay-container" style={{ marginBottom: '10px', minHeight: '48px' }}></div>
+
+            {/* Google Pay */}
+            <div id="google-pay-container" style={{ marginBottom: '10px', minHeight: '48px' }}></div>
+
+            {/* PayPal */}
+            <div id="paypal-container" style={{ marginBottom: '10px', minHeight: '48px' }}></div>
+
+            {/* Tarjeta */}
             <div id="card-container" style={{ minHeight: '170px' }}></div>
+
             {squareError && <div className="text-danger text-center mt-2">{squareError}</div>}
             <button
               className="btn btn-warning w-100 mt-3 fw-bold"

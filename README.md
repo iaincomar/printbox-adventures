@@ -858,6 +858,104 @@ const getImageUrl = (url) => {
 
 ---
 
+## 14.2 Apple Pay y Google Pay (Abril 2026)
+
+### Implementación
+
+La app móvil ahora soporta pagos nativos en iOS y Android:
+
+| Dispositivo | Método de pago | Implementación |
+|---|---|---|
+| iOS | Apple Pay | Square SDK `payments.applePay()` + verificación de dominio |
+| Android | Google Pay | Square SDK `payments.googlePay()` |
+| Todos | PayPal | Square SDK `payments.paypal()` |
+| Todos | Tarjeta | Square Card Element siempre disponible |
+
+### Flujo técnico
+
+1. **Detección de dispositivo** (`detectDeviceType()`):
+   ```javascript
+   function detectDeviceType() {
+     const ua = navigator.userAgent
+     if (/iPad|iPhone|iPod/.test(ua)) return 'ios'
+     if (/Android/.test(ua)) return 'android'
+     return 'other'
+   }
+   ```
+
+2. **Inicialización en `src/mobile/MobileApp.jsx`**:
+   - Card siempre se inicializa
+   - Apple Pay solo en iOS
+   - Google Pay solo en Android
+   - PayPal en todos los dispositivos
+   - Los botones se renderizan automáticamente dentro los contenedores `#apple-pay-container`, `#google-pay-container` y `#paypal-container`
+
+3. **Eventos de tokenización**:
+   ```javascript
+   // Los botones de Square lanzan eventos automáticos
+   applePay.addEventListener('tokenization', async (event) => {
+     const { token, status } = event.detail
+     if (status === 'OK') {
+       await processSquarePayment(token, 'Apple Pay')
+     }
+   })
+   ```
+
+### Verificación de dominio Apple Pay
+
+Square requiere una verificación de dominio para activar Apple Pay.
+
+**Archivo de verificación:**
+```
+.well-known/apple-developer-merchantid-domain-association
+```
+
+**Configuración `.htaccess`:**
+```apache
+<Files "apple-developer-merchantid-domain-association">
+    Header always set Content-Type "application/json"
+    Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "Thu, 01 Jan 1970 00:00:00 GMT"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+</Files>
+```
+
+**Ubicación en producción (IONOS):**
+- Primary: `https://printbox.incomar.net/.well-known/apple-developer-merchantid-domain-association`
+- Backup: `https://printbox.incomar.net/apple-developer-merchantid-domain-association` (raíz)
+
+**Build**: El archivo se copia automáticamente con `npm run build`:
+```bash
+postbuild: "copy .htaccess dist\ && copy proxy.php dist\ && xcopy .well-known dist\.well-known\ /E /I /Y"
+```
+
+### Debug
+
+```javascript
+// En la consola del navegador (DevTools → Console)
+// Verifica el estado de inicialización de Square
+console.log('Square Card:', !!squareCard)
+console.log('Square Apple Pay:', !!squareApplePay)
+console.log('Square Google Pay:', !!squareGooglePay)
+```
+
+En Android:
+```
+Tarjeta ✓ → Inicializada
+Google Pay ✗ → No disponible (requiere Google Play Services)
+```
+
+### Archivos modificados
+- `src/mobile/MobileApp.jsx` — Detección de dispositivo, inicialización de Apple Pay/Google Pay, listeners de eventos
+- `.htaccess` — Headers para archivo de verificación
+- `.well-known/apple-developer-merchantid-domain-association` — Archivo de verificación desde Square Dashboard
+- `package.json` → `postbuild` — Copia el archivo de verificación al dist
+
+---
+
 ## 15. Pendientes / Ideas de mejora
 
 ### Funcionales
@@ -865,6 +963,8 @@ const getImageUrl = (url) => {
 - [ ] Notificación toast al imprimir
 - [ ] Sonido de confirmación al imprimir
 - [x] Pago integrado (Square/BBVA) ✅ Abril 2026 - PRODUCTION
+- [x] Apple Pay (iOS) ✅ Abril 2026
+- [x] Google Pay (Android) ✅ Abril 2026
 
 ### Viewer
 - [x] QR dinámico con código de evento en la URL ✅ Marzo 2026

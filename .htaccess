@@ -2,6 +2,9 @@ Options -MultiViews
 RewriteEngine On
 RewriteBase /
 
+# Allow Square fonts
+Header always set Content-Security-Policy "font-src 'self' data: https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:;"
+
 # ¡IMPORTANTE! Las reglas de API DEBEN ir ANTES de la regla de archivos/directorios reales
 # Porque /config/ es una carpeta real que existe, Apache la ve como directorio
 # y no la reescribe si la regla de archivos/directorios reales viene primero
@@ -18,11 +21,25 @@ RewriteRule ^process-payment/?$ /proxy.php [PT,L,QSA]
 # Debug endpoint
 RewriteRule ^debug(/.*)?$ /proxy.php [PT,L,QSA]
 
+# Apple Pay domain verification - route to proxy.php
+RewriteRule ^(\.well-known/)?apple-developer-merchantid-domain-association/?$ /proxy.php [PT,L,QSA]
+
 # APIs y proxy
 RewriteRule ^health$ /proxy.php [PT,L,QSA]
 RewriteRule ^print/.*$ /proxy.php [PT,L,QSA]
 RewriteRule ^printbox/.*$ /proxy.php [PT,L,QSA]
 RewriteRule ^proxy-image/.*$ /proxy.php [PT,L,QSA]
+
+# Apple Pay domain verification - headers
+<Files "apple-developer-merchantid-domain-association">
+    Header always set Content-Type "application/json"
+    Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
+    Header always set Pragma "no-cache"
+    Header always set Expires "Thu, 01 Jan 1970 00:00:00 GMT"
+    Header always set Access-Control-Allow-Origin "*"
+    Header always set Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
+</Files>
 
 # AHORA sí, permitir archivos y directorios reales (index.html, CSS, JS, imágenes, etc.)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
