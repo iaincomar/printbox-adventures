@@ -8,22 +8,22 @@ Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Pyth
 
 ## Índice
 
-1. [Descripción general](#1-descripción-general)
+1. [Descripción general](#1-descripci%C3%B3n-general)
 2. [Requisitos](#2-requisitos)
-3. [Instalación y arranque](#3-instalación-y-arranque)
+3. [Instalación y arranque](#3-instalaci%C3%B3n-y-arranque)
 4. [Compilar instalador .exe](#4-compilar-instalador-exe)
-4.1. [Despliegue automático con GitHub Actions](#41-despliegue-automático-con-github-actions)
+4.1. [Despliegue automático con GitHub Actions](#41-despliegue-autom%C3%A1tico-con-github-actions)
 5. [Estructura del proyecto](#5-estructura-del-proyecto)
-6. [Cómo funciona la aplicación](#6-cómo-funciona-la-aplicación)
-7. [App móvil web](#7-app-móvil-web)
-8. [Archivos de configuración](#8-archivos-de-configuración)
-9. [Assets / Imágenes](#9-assets--imágenes)
-10. [Arquitectura técnica](#10-arquitectura-técnica)
+6. [Cómo funciona la aplicación](#6-c%C3%B3mo-funciona-la-aplicaci%C3%B3n)
+7. [App móvil web](#7-app-m%C3%B3vil-web)
+8. [Archivos de configuración](#8-archivos-de-configuraci%C3%B3n)
+9. [Assets / Imágenes](#9-assets--im%C3%A1genes)
+10. [Arquitectura técnica](#10-arquitectura-t%C3%A9cnica)
 11. [Flujo de datos completo](#11-flujo-de-datos-completo)
 12. [Dependencias principales](#12-dependencias-principales)
 13. [Mejoras implementadas](#13-mejoras-implementadas)
-14. [Solución de problemas](#14-solución-de-problemas)
-14.1. [Nuevas características (Marzo 2026)](#141-nuevas-características-marzo-2026)
+14. [Solución de problemas](#14-soluci%C3%B3n-de-problemas)
+14.1. [Nuevas características (Marzo 2026)](#141-nuevas-caracter%C3%ADsticas-marzo-2026)
 15. [Pendientes / Ideas de mejora](#15-pendientes--ideas-de-mejora)
 
 ---
@@ -35,14 +35,14 @@ PrintboxAdventures se compone de **dos interfaces públicas en web** y **una app
 ### Interfaces web (públicas)
 
 | Pantalla | Ruta | Uso |
-|---|---|---|
+| --- | --- | --- |
 | Visor de Evento | `/viewer` | Proyección de fotos en pantalla pública del evento |
 | App Móvil | `/mobile` | Cliente escanea QR desde su móvil para ver/comprar fotos |
 
 ### App de escritorio (Electron)
 
 | Aplicación | Acceso | Uso |
-|---|---|---|
+| --- | --- | --- |
 | Panel de Control | Solo Electron | Operador del evento (sin acceso web) |
 
 Se conecta a la API de Printbox en `https://gestion.printboxweb.com` (servidor Laravel).
@@ -54,13 +54,15 @@ Se conecta a la API de Printbox en `https://gestion.printboxweb.com` (servidor L
 ## 2. Requisitos
 
 ### Para desarrollo
+
 - Windows 10/11 x64
-- Node.js v18 o superior → https://nodejs.org
+- Node.js v18 o superior → <https://nodejs.org>
 - npm (incluido con Node.js)
 - Una impresora instalada
 - Conexión a internet
 
 ### Para el equipo destino (instalador .exe)
+
 - Windows 10/11 x64
 - **No necesita** Node.js ni nada de desarrollo
 - Sí necesita impresora y conexión a internet
@@ -408,7 +410,7 @@ empresa:PrintboxAdventures
 ## 9. Assets / Imágenes
 
 | Archivo | Uso | Notas |
-|---|---|---|
+| --- | --- | --- |
 | `banners-AdventureSup.png` | Banner superior Viewer | 90px fijo, textos pintados en la imagen |
 | `qr-code.png` | QR del header | Reemplazar con QR real del evento |
 | `MoscaPrintbox.png` | Logo/mascota | También usado como favicon |
@@ -423,7 +425,7 @@ Para reemplazar: sustituir el archivo con el mismo nombre → `npm run build`.
 ### Stack
 
 | Capa | Tecnología |
-|---|---|
+| --- | --- |
 | Frontend | React 18 + Vite 7 + Bootstrap 5.3.8 CDN dark mode + React Router |
 | API HTTP | Fetch API (nativa) |
 | Backend | Node.js + Express 4 (puerto 4000) |
@@ -509,7 +511,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 ### Producción
 
 | Paquete | Uso |
-|---|---|
+| --- | --- |
 | `express` | Servidor web local |
 | `cors` | Cabeceras CORS |
 | `fs-extra` | Utilidades de ficheros |
@@ -523,7 +525,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 ### Desarrollo
 
 | Paquete | Uso |
-|---|---|
+| --- | --- |
 | `vite` + `@vitejs/plugin-react` | Compilador y dev server |
 | `react` + `react-dom` | Framework UI |
 | `react-router-dom` | HashRouter |
@@ -537,7 +539,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 ## 13. Mejoras implementadas
 
 | Mejora | Archivo | Descripción |
-|---|---|---|
+| --- | --- | --- |
 | ✅ Modo quiosco | `electron/main.js` | Viewer en pantalla completa. `F11`/`Escape` para salir |
 | ✅ Splash screen | `electron/main.js` | Logo + barra de progreso mientras arranca Express (2.5s) |
 | ✅ Bandeja del sistema | `electron/main.js` | La X minimiza a tray. Menú contextual. `Ctrl+Q` para cerrar |
@@ -865,7 +867,7 @@ const getImageUrl = (url) => {
 La app móvil ahora soporta pagos nativos en iOS y Android:
 
 | Dispositivo | Método de pago | Implementación |
-|---|---|---|
+| --- | --- | --- |
 | iOS | Apple Pay | Square SDK `payments.applePay()` + verificación de dominio |
 | Android | Google Pay | Square SDK `payments.googlePay()` |
 | Todos | Tarjeta | Square Card Element siempre disponible |
