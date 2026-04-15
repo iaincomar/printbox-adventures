@@ -4,3 +4,4 @@ dist-electron/
 descargas/
 pdf/
 *.log
+config/paypal.json
