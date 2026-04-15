@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { findEvent, getEventPhotos, sendPhoto, getConfig, processPayment } from '../shared/api'
+import { findEvent, getEventPhotos, sendPhoto, getConfig, processPayment, getPayPalConfig, createPayPalOrder, capturePayPalOrder } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Mobile.css'
 
@@ -96,11 +96,16 @@ export default function MobileApp() {
   const [toast, setToast] = useState(null)               // Mensaje de toast
   const [squareCard, setSquareCard] = useState(null)     // Objeto Square card
   const [squareApplePay, setSquareApplePay] = useState(null) // Objeto Square Apple Pay
-  const [squareGooglePay, setSquareGooglePay] = useState(null) // Objeto Square Google Pay
-  const [squarePayPal, setSquarePayPal] = useState(null) // Objeto Square PayPal
   const [squareError, setSquareError] = useState('')     // Error de Square
   const [squareLoading, setSquareLoading] = useState(false) // Pago Square en progreso
   const [deviceType, setDeviceType] = useState('other')  // Tipo de dispositivo: 'ios', 'android', 'other'
+  const [applePayAvailable, setApplePayAvailable] = useState(false) // Apple Pay disponible
+  const [paypalClientId, setPaypalClientId] = useState('') // PayPal client ID devuelto por backend
+  const [paypalEnv, setPaypalEnv] = useState('sandbox')  // PayPal environment
+  const [paypalReady, setPaypalReady] = useState(false)  // PayPal SDK y botones listos
+  const [paypalError, setPaypalError] = useState('')    // Error de PayPal
+  const [paypalLoading, setPaypalLoading] = useState(false) // Pago PayPal en progreso
+  const paypalButtonsRef = useRef(null)                  // Referencia a PayPal Buttons
 
   const applyTextos = (incoming) => {
     if (!incoming) return
@@ -253,10 +258,14 @@ export default function MobileApp() {
       }
     }
 
-    // Cargar config global al iniciar (backward compatibility)
-    getConfig().then(d => {
-      if (d.textos) applyTextos(d.textos)
-    }).catch(() => { })
+    // Cargar config global al iniciar solo si no hay eventCode guardado
+    // (para mostrar textos por defecto mientras el usuario ingresa el código)
+    const saved = loadFromLocalStorage()
+    if (!saved || !saved.eventCode) {
+      getConfig().then(d => {
+        if (d.textos) applyTextos(d.textos)
+      }).catch(() => { })
+    }
   }, [])
 
   // Refrescar precios del config cada 5 segundos (sincronización con admin)
@@ -322,6 +331,7 @@ export default function MobileApp() {
               await applePay.attach('#apple-pay-container')
               console.log('🍎 Apple Pay attached')
               setSquareApplePay(applePay)
+              setApplePayAvailable(true)
               
               // Listener para el evento de tokenización de Square
               appleContainer.addEventListener('tokenization', async (e) => {
@@ -345,84 +355,8 @@ export default function MobileApp() {
             }
           } catch (e) {
             console.warn('⚠️ Apple Pay no disponible:', e.message)
+            setApplePayAvailable(false)
           }
-        }
-
-        // Inicializar Google Pay
-        if (deviceType === 'android') {
-          console.log('🔵 Intentando inicializar Google Pay...')
-          try {
-            const paymentRequest = payments.paymentRequest(createPaymentRequestData())
-            const googlePay = await payments.googlePay(paymentRequest)
-            const googleContainer = document.getElementById('google-pay-container')
-            console.log('🔵 Contenedor Google Pay?', !!googleContainer)
-            
-            if (googleContainer) {
-              await googlePay.attach('#google-pay-container')
-              console.log('🔵 Google Pay attached')
-              setSquareGooglePay(googlePay)
-              
-              // Listener para el evento de tokenización de Square
-              googleContainer.addEventListener('tokenization', async (e) => {
-                console.log('🔵 Tokenization event:', e.detail)
-                try {
-                  const { token, status } = e.detail || {}
-                  if (status === 'OK' && token) {
-                    await processSquarePayment(token, 'Google Pay')
-                  } else {
-                    setSquareError('Google Pay: Error en tokenización')
-                  }
-                } catch (err) {
-                  console.error('🔵 Google Pay error:', err)
-                  setSquareError(`Google Pay: ${err.message}`)
-                }
-              })
-              
-              console.log('✅ Google Pay inicializado')
-            } else {
-              console.error('❌ Contenedor #google-pay-container no encontrado')
-            }
-          } catch (e) {
-            console.warn('⚠️ Google Pay no disponible:', e.message)
-          }
-        }
-
-        // Inicializar PayPal (disponible en todos los dispositivos)
-        console.log('💰 Intentando inicializar PayPal...')
-        try {
-          const paypal = await payments.paypal({
-            createPaymentRequest: createPaymentRequestData,
-          })
-          const paypalContainer = document.getElementById('paypal-container')
-          console.log('💰 Contenedor PayPal?', !!paypalContainer)
-          
-          if (paypalContainer) {
-            await paypal.attach('#paypal-container')
-            console.log('💰 PayPal attached')
-            setSquarePayPal(paypal)
-            
-            // Listener para el evento de tokenización de Square
-            paypalContainer.addEventListener('tokenization', async (e) => {
-              console.log('💰 PayPal tokenization event:', e.detail)
-              try {
-                const { token, status } = e.detail || {}
-                if (status === 'OK' && token) {
-                  await processSquarePayment(token, 'PayPal')
-                } else {
-                  setSquareError('PayPal: Error en tokenización')
-                }
-              } catch (err) {
-                console.error('💰 PayPal error:', err)
-                setSquareError(`PayPal: ${err.message}`)
-              }
-            })
-            
-            console.log('✅ PayPal inicializado')
-          } else {
-            console.error('❌ Contenedor #paypal-container no encontrado')
-          }
-        } catch (e) {
-          console.warn('⚠️ PayPal no disponible:', e.message)
         }
 
         setSquareError('')
@@ -434,7 +368,135 @@ export default function MobileApp() {
     initSquare()
   }, [step])
 
+  useEffect(() => {
+    if (step !== STEP_ORDER) return
+
+    let cancelled = false
+
+    const loadPayPalScript = (clientId) => {
+      return new Promise((resolve, reject) => {
+        if (window.paypal) {
+          resolve(window.paypal)
+          return
+        }
+
+        const existingScript = document.querySelector('script[data-paypal-sdk]')
+        if (existingScript) {
+          existingScript.addEventListener('load', () => resolve(window.paypal))
+          existingScript.addEventListener('error', () => reject(new Error('Error cargando PayPal')))
+          return
+        }
+
+        const script = document.createElement('script')
+        script.setAttribute('data-paypal-sdk', 'true')
+        script.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=EUR&intent=capture`
+        script.async = true
+        script.onload = () => {
+          if (window.paypal) resolve(window.paypal)
+          else reject(new Error('PayPal SDK no disponible'))
+        }
+        script.onerror = () => reject(new Error('Error cargando PayPal SDK'))
+        document.body.appendChild(script)
+      })
+    }
+
+    const initPayPal = async () => {
+      setPaypalError('')
+      setPaypalReady(false)
+      try {
+        const config = await getPayPalConfig()
+        if (cancelled) return
+
+        if (!config.clientId) {
+          throw new Error('PayPal no está configurado en el servidor')
+        }
+
+        setPaypalClientId(config.clientId)
+        setPaypalEnv(config.env || 'sandbox')
+
+        const paypal = await loadPayPalScript(config.clientId)
+        if (cancelled) return
+
+        if (!paypal.Buttons) {
+          throw new Error('PayPal Buttons no disponible')
+        }
+
+        const buttons = paypal.Buttons({
+          style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' },
+          createOrder: async () => {
+            const amount = totalPrice()
+            return await createPayPalOrder({ amount, currency: 'EUR' })
+          },
+          onApprove: async (data) => {
+            console.log('🅿️ PayPal onApprove triggered:', data)
+            setPaypalLoading(true)
+            try {
+              console.log('🅿️ Capturing PayPal order:', data.orderID)
+              await capturePayPalOrder(data.orderID)
+              console.log('🅿️ PayPal order captured successfully')
+              showToast('Pago PayPal completado')
+
+              // Intentar enviar fotos después del pago, pero NO bloquear si falla
+              try {
+                console.log('🅿️ Sending order photos...')
+                await sendOrderPhotos()
+                console.log('🅿️ Photos sent successfully')
+              } catch (photoError) {
+                console.error('❌ Error enviando fotos (pero pago PayPal fue exitoso):', photoError)
+                showToast('Pago completado. Las fotos se enviarán más tarde.')
+              }
+
+              // Avanzar al paso de éxito sea o no haya fallado el envío de fotos
+              console.log('🅿️ Setting step to SUCCESS')
+              setStep(STEP_SUCCESS)
+            } catch (error) {
+              console.error('❌ Error captura PayPal:', error)
+              setPaypalError(error.message || 'Error capturando pago PayPal')
+            } finally {
+              setPaypalLoading(false)
+            }
+          },
+          onError: (error) => {
+            console.error('❌ PayPal onError:', error)
+            setPaypalError(error?.message || 'Error en PayPal')
+          },
+          onCancel: () => {
+            console.log('⚠️ PayPal onCancel: User cancelled payment')
+            showToast('Pago PayPal cancelado')
+          },
+        })
+
+        if (cancelled) return
+        paypalButtonsRef.current = buttons
+
+        const container = document.getElementById('paypal-button-container')
+        if (!container) {
+          throw new Error('Contenedor PayPal no encontrado')
+        }
+
+        await buttons.render('#paypal-button-container')
+        if (cancelled) return
+
+        setPaypalReady(true)
+      } catch (e) {
+        if (!cancelled) {
+          setPaypalError(e.message || 'No se pudo inicializar PayPal')
+          console.warn('PayPal init:', e)
+        }
+      }
+    }
+
+    initPayPal()
+    return () => { cancelled = true }
+  }, [step])
+
   const handleSquarePayment = async () => {
+    console.log('💳 handleSquarePayment invocado')
+    console.log('💳 squareCard disponible?', !!squareCard)
+    console.log('💳 squareGooglePay disponible?', !!squareGooglePay)
+    console.log('💳 squareApplePay disponible?', !!squareApplePay)
+    console.log('💳 deviceType:', deviceType)
+    
     if (!squareCard) {
       setSquareError('Pasarela de pago no inicializada')
       return
@@ -523,11 +585,11 @@ export default function MobileApp() {
    */
   useEffect(() => {
     if (uuid || step === STEP_ORDER) {
-      getConfig().then(d => {
+      getConfig(eventCode).then(d => {
         if (d.textos) applyTextos(d.textos)
       }).catch(() => { })
     }
-  }, [uuid, step])
+  }, [uuid, step, eventCode])
 
   /**
    * Guardar estado en localStorage cuando cambie
@@ -572,9 +634,9 @@ export default function MobileApp() {
       setUuid(id)
       uuidRef.current = id
 
-      // Recargar config para precios actualizados
+      // Recargar config para precios actualizados del evento específico
       try {
-        const configData = await getConfig()
+        const configData = await getConfig(eventCodeToUse)
         if (configData.textos) {
           setTextos(configData.textos)
         }
@@ -928,7 +990,7 @@ export default function MobileApp() {
   // INTERVALO PARA ACTUALIZAR PRECIOS
   // ============================================
   useInterval(() => {
-    getConfig().then(d => {
+    getConfig(eventCode || undefined).then(d => {
       if (d.textos) applyTextos(d.textos)
     }).catch(err => {
       console.error('Error actualizando precios:', err)
@@ -1246,30 +1308,74 @@ export default function MobileApp() {
             <span className="order-total-amount">{totalPrice()}€</span>
           </div>
 
-          {/* Square Payment */}
-          <div id="square-payment-section" className="p-3 bg-dark border rounded mt-3 w-100">
-            <h6 className="text-white text-center mb-3">Seleccionar método de pago</h6>
-
-            {/* Apple Pay */}
-            <div id="apple-pay-container" style={{ marginBottom: '10px', minHeight: '48px' }}></div>
-
-            {/* Google Pay */}
-            <div id="google-pay-container" style={{ marginBottom: '10px', minHeight: '48px' }}></div>
+          {/* Métodos de Pago */}
+          <div className="payment-methods-section">
+            <h6 className="payment-title">💳 Selecciona tu método de pago</h6>
 
             {/* PayPal */}
-            <div id="paypal-container" style={{ marginBottom: '10px', minHeight: '48px' }}></div>
+            <div className="payment-method-card paypal-card">
+              <div className="payment-method-header">
+                <div className="payment-method-icon">
+                  <i className="bi bi-paypal"></i>
+                </div>
+                <div className="payment-method-info">
+                  <div className="payment-method-name">PayPal</div>
+                  <div className="payment-method-desc">Paga con tu cuenta PayPal o tarjeta</div>
+                </div>
+              </div>
+              <div className="payment-method-content">
+                {paypalError && <div className="text-danger text-center mb-2">{paypalError}</div>}
+                <div id="paypal-button-container" style={{ minHeight: '70px' }} />
+                {!paypalReady && !paypalError && (
+                  <div className="text-center text-muted mb-2">Cargando PayPal...</div>
+                )}
+                {!paypalClientId && (
+                  <div className="text-center text-muted mb-2">PayPal no configurado en el servidor.</div>
+                )}
+              </div>
+            </div>
 
-            {/* Tarjeta */}
-            <div id="card-container" style={{ minHeight: '170px' }}></div>
+            {/* Apple Pay */}
+            {applePayAvailable && (
+              <div className="payment-method-card apple-pay-card">
+                <div className="payment-method-header">
+                  <div className="payment-method-icon">
+                    <i className="bi bi-apple"></i>
+                  </div>
+                  <div className="payment-method-info">
+                    <div className="payment-method-name">Apple Pay</div>
+                    <div className="payment-method-desc">Pago rápido con Apple Pay</div>
+                  </div>
+                </div>
+                <div className="payment-method-content">
+                  <div id="apple-pay-container" style={{ minHeight: '48px' }}></div>
+                </div>
+              </div>
+            )}
 
-            {squareError && <div className="text-danger text-center mt-2">{squareError}</div>}
-            <button
-              className="btn btn-warning w-100 mt-3 fw-bold"
-              onClick={handleSquarePayment}
-              disabled={squareLoading || !squareCard || totalCopies === 0}
-            >
-              {squareLoading ? 'Procesando pago...' : `PAGAR ${totalPrice()}€`}
-            </button>
+            {/* Tarjeta de Crédito */}
+            <div className="payment-method-card card-payment-card">
+              <div className="payment-method-header">
+                <div className="payment-method-icon">
+                  <i className="bi bi-credit-card"></i>
+                </div>
+                <div className="payment-method-info">
+                  <div className="payment-method-name">Tarjeta de Crédito/Débito</div>
+                  <div className="payment-method-desc">Visa, Mastercard, American Express</div>
+                </div>
+              </div>
+              <div className="payment-method-content">
+                <div id="card-container" style={{ minHeight: '170px' }}></div>
+                {squareError && <div className="text-danger text-center mt-2">{squareError}</div>}
+                <button
+                  className="btn btn-warning w-100 mt-3 fw-bold payment-btn"
+                  onClick={handleSquarePayment}
+                  disabled={squareLoading || !squareCard || totalCopies === 0}
+                >
+                  {squareLoading ? 'Procesando pago...' : `Pagar ${totalPrice()}€`}
+                </button>
+              </div>
+            </div>
           </div>
 
           <div className="alert alert-secondary order-payment-note">
@@ -1278,7 +1384,8 @@ export default function MobileApp() {
           </div>
         </div>
 
-        {/* Footer con botón de confirmación */}
+        {/* Footer con botón de confirmación - DESHABILITADO POR AHORA */}
+        {/* 
         <div className="order-footer">
           <button
             className="btn btn-warning order-confirm-btn"
@@ -1298,6 +1405,7 @@ export default function MobileApp() {
             )}
           </button>
         </div>
+        */}
 
         {toast && <div className="mobile-toast">{toast}</div>}
       </div>

@@ -163,6 +163,47 @@ export async function saveConfig(config, textos, eventCode = '') {
   }
 }
 
+export async function createPayPalOrder({ amount, currency = 'EUR' }) {
+  const url = `${BACKEND_URL || ''}/paypal/create-order`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount, currency }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`
+    throw new Error(`PayPal create order failed: ${msg}`)
+  }
+  return data.orderID || data.id || data.orderId
+}
+
+export async function capturePayPalOrder(orderId) {
+  const url = `${BACKEND_URL || ''}/paypal/capture-order`
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId }),
+  })
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`
+    throw new Error(`PayPal capture order failed: ${msg}`)
+  }
+  return data
+}
+
+export async function getPayPalConfig() {
+  const url = `${BACKEND_URL || ''}/paypal/config`
+  const res = await fetch(url)
+  const data = await res.json()
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `HTTP ${res.status}`
+    throw new Error(`PayPal config fetch failed: ${msg}`)
+  }
+  return data
+}
+
 export async function processPayment({ token, amount, currency = 'EUR', location_id }) {
   const url = `${BACKEND_URL || ''}/process-payment`
   try {

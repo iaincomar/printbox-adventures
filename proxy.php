@@ -52,16 +52,22 @@ if (!function_exists('curl_init')) {
 // ── Funciones helper ──
 
 function getConfigDir() {
-    // En Windows local: usar LOCALAPPDATA
+    $scriptConfig = __DIR__ . '/config';
+    if (is_dir($scriptConfig) && is_writable($scriptConfig)) {
+        return $scriptConfig;
+    }
+
+    // En Windows local: usar LOCALAPPDATA si el directorio existe o si se puede crear
     $localAppData = getenv('LOCALAPPDATA');
     if ($localAppData) {
         $dir = $localAppData . '/PrintboxAdventures/config';
-        if (is_writable(dirname($dir))) {
+        if (is_dir($dir) || is_writable(dirname($dir))) {
             return $dir;
         }
     }
-    // En servidor web (IONOS): usar directorio del script
-    return __DIR__ . '/config';
+
+    // En servidor web (IONOS): usar directorio del script como fallback
+    return $scriptConfig;
 }
 
 function getTextosFile($configDir, $eventCode = '') {
@@ -74,6 +80,66 @@ function getTextosFile($configDir, $eventCode = '') {
         return $configDir . '/textos_' . $eventCode . '.txt';
     }
     return $configDir . '/textos.txt';
+}
+
+function getPaypalConfigFile($configDir) {
+    $result = [];
+
+    $jsonPath = $configDir . '/paypal.json';
+    if (file_exists($jsonPath)) {
+        $content = file_get_contents($jsonPath);
+        $parsed = json_decode($content, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($parsed)) {
+            $result = array_merge($result, $parsed);
+        }
+    }
+
+    $txtPath = $configDir . '/paypal.txt';
+    if (file_exists($txtPath)) {
+        $lines = file($txtPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            if (strpos(trim($line), '#') === 0) {
+                continue;
+            }
+            $parts = explode('=', $line, 2);
+            if (count($parts) === 2) {
+                $key = trim($parts[0]);
+                $value = trim($parts[1]);
+                if ($key !== '') {
+                    $result[$key] = $value;
+                }
+            }
+        }
+    }
+
+    return $result;
+}
+
+function getPaypalCredentials($configDir) {
+    $credentials = [
+        'clientId' => getenv('PAYPAL_CLIENT_ID') ?: '',
+        'clientSecret' => getenv('PAYPAL_CLIENT_SECRET') ?: '',
+        'env' => getenv('PAYPAL_ENV') ?: '',
+    ];
+
+    if (!$credentials['clientId'] || !$credentials['clientSecret'] || !$credentials['env']) {
+        $fileConfig = getPaypalConfigFile($configDir);
+        if (!$credentials['clientId'] && !empty($fileConfig['clientId'])) {
+            $credentials['clientId'] = $fileConfig['clientId'];
+        }
+        if (!$credentials['clientSecret'] && !empty($fileConfig['clientSecret'])) {
+            $credentials['clientSecret'] = $fileConfig['clientSecret'];
+        }
+        if (!$credentials['env'] && !empty($fileConfig['env'])) {
+            $credentials['env'] = $fileConfig['env'];
+        }
+    }
+
+    if (!$credentials['env']) {
+        $credentials['env'] = 'sandbox';
+    }
+
+    return $credentials;
 }
 
 function getCsrfToken() {
@@ -584,6 +650,104 @@ if ($uri === '/process-payment') {
 
     // Log de respuesta de Square para debuggear
     @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /process-payment Response: HTTP $httpCode " . substr($response, 0, 500) . "\n", FILE_APPEND);
+
+    http_response_code($httpCode ?: 500);
+    echo $response;
+    exit();
+}
+
+// ── /paypal/config (Devuelve clientId para PayPal JS SDK) ──
+if ($uri === '/paypal/config') {
+    $paypal = getPaypalCredentials(getConfigDir());
+    header('Content-Type: application/json');
+    echo json_encode([
+        'clientId' => $paypal['clientId'],
+        'env' => $paypal['env'],
+        'currency' => 'EUR',
+    ]);
+    exit();
+}
+
+// ── /paypal/create-order (Crea orden en PayPal) ──
+if ($uri === '/paypal/create-order') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $paypal = getPaypalCredentials(getConfigDir());
+
+    if (!$paypal['clientId'] || !$paypal['clientSecret']) {
+        http_response_code(500);
+        echo json_encode(['error' => 'PayPal no configurado en el servidor']);
+        exit();
+    }
+
+    $amount = isset($data['amount']) ? number_format(floatval($data['amount']), 2, '.', '') : null;
+    $currency = $data['currency'] ?? 'EUR';
+
+    if (!$amount) {
+        http_response_code(400);
+        echo json_encode(['error' => 'amount es requerido']);
+        exit();
+    }
+
+    $urlBase = $paypal['env'] === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+    $url = "$urlBase/v2/checkout/orders";
+    $payload = json_encode([
+        'intent' => 'CAPTURE',
+        'purchase_units' => [[
+            'amount' => [
+                'currency_code' => $currency,
+                'value' => $amount,
+            ],
+        ]],
+    ]);
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Basic ' . base64_encode($paypal['clientId'] . ':' . $paypal['clientSecret']),
+        'Content-Type: application/json',
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    http_response_code($httpCode ?: 500);
+    echo $response;
+    exit();
+}
+
+// ── /paypal/capture-order (Captura orden PayPal) ──
+if ($uri === '/paypal/capture-order') {
+    $data = json_decode(file_get_contents('php://input'), true);
+    $paypal = getPaypalCredentials(getConfigDir());
+
+    if (!$paypal['clientId'] || !$paypal['clientSecret']) {
+        http_response_code(500);
+        echo json_encode(['error' => 'PayPal no configurado en el servidor']);
+        exit();
+    }
+
+    $orderId = $data['orderId'] ?? '';
+    if (!$orderId) {
+        http_response_code(400);
+        echo json_encode(['error' => 'orderId es requerido']);
+        exit();
+    }
+
+    $urlBase = $paypal['env'] === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+    $url = "$urlBase/v2/checkout/orders/{$orderId}/capture";
+
+    $ch = curl_init($url);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Basic ' . base64_encode($paypal['clientId'] . ':' . $paypal['clientSecret']),
+        'Content-Type: application/json',
+    ]);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
 
     http_response_code($httpCode ?: 500);
     echo $response;

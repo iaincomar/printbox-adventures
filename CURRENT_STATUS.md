@@ -2,13 +2,13 @@
 
 ---
 
-## ✅ Implementado: Apple Pay, Google Pay y PayPal (Abril 2026)
+## ✅ Implementado: Apple Pay y Google Pay (Abril 2026)
 
 ### Características
 
 - **iOS**: Apple Pay con verificación de dominio Square
 - **Android**: Google Pay (si Google Play Services instalado)
-- **Todos los dispositivos**: PayPal
+- **PayPal**: botón estándar PayPal integrado como flujo independiente
 - **Fallback**: Tarjeta de crédito tradicional siempre disponible
 
 ### Flujo de implementación
@@ -18,7 +18,6 @@
    - Tarjeta: siempre
    - Apple Pay: solo en iOS
    - Google Pay: solo en Android
-   - PayPal: en todos los dispositivos
 3. **Renderizado automático** de botones dentro contenedores Square
 4. **Event listeners** para capturar tokenización
 
@@ -40,20 +39,22 @@ Expires: Thu, 01 Jan 1970 00:00:00 GMT
 
 **Configurado en:** `.htaccess` con directiva `<Files>`
 
+**Empaquetado para dist:** `.htaccess`, `proxy.php` y `.well-known/apple-developer-merchantid-domain-association` copiados a `dist/`
+
 ### Problemas actuales (abril 2026)
 
 #### ❌ Botones no aparecen
 - **Apple Pay**: Dominio no verificado en Square (archivo de verificación no subido al servidor)
-- **Google Pay**: Inicializa pero botón no funcional (posible problema con payment request o dispositivo)
-- **PayPal**: Implementado pero no probado
+- **Google Pay**: Inicializa pero botón no funcional si el navegador bloquea estilos de `pay.js` o el dispositivo no está configurado
 
-#### ❌ Errores de CSP (fuentes Square)
-- Fuentes de `cash-f.squarecdn.com` bloqueadas por CSP restrictiva de Square SDK
-- Solución temporal: CSP permisiva en `index.html` y `.htaccess`
+#### ❌ Errores de CSP
+- El SDK de Square necesita `style-src 'unsafe-inline'` para aplicar estilos en `pay.js`
+- El CSP también debe permitir fuentes desde `https://cash-f.squarecdn.com`
+- Solución aplicada temporalmente en `index.html` y `.htaccess`
 
 #### ❌ Google Pay no responde al clic
-- Botón se renderiza pero no genera eventos de tokenización
-- Posibles causas: Dispositivo sin Google Pay configurado, payment request inválido, o error en event listener
+- Botón puede renderizarse pero no generar tokenización si el payment request no se admite
+- Posibles causas: dispositivo Android sin Google Pay configurado o bloqueo CSP de estilos/scripts
 
 ### Debug
 
@@ -64,17 +65,17 @@ Device type: ios|android|other
 Square Card: true|false
 Square Apple Pay: true|false
 Square Google Pay: true|false
-Square PayPal: true|false
 Step: (paso actual de la app)
 ```
 
 ### Próximos pasos
 
-1. **Subir archivo de verificación Apple Pay** desde Square Dashboard a `dist/.well-known/apple-developer-merchantid-domain-association`
-2. **Verificar dominio** en Square
-3. **Probar en dispositivos reales** con Apple Pay/Google Pay configurados
-4. **Depurar Google Pay** agregando más logs de consola
-5. **Ajustar CSP** para seguridad una vez funcional
+1. **Verificar dominio** en Square usando el archivo ya disponible en `dist/.well-known/apple-developer-merchantid-domain-association`
+2. **Probar en dispositivos reales** con Apple Pay/Google Pay configurados
+3. **Probar PayPal** en entorno sandbox para confirmar el flujo independiente
+4. **Configurar PayPal** en el servidor con variables de entorno o `config/paypal.json`
+5. **Depurar Google Pay** agregando más logs de consola
+6. **Ajustar CSP** para seguridad una vez funcional
 ```
 
 ---

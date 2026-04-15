@@ -868,7 +868,6 @@ La app móvil ahora soporta pagos nativos en iOS y Android:
 |---|---|---|
 | iOS | Apple Pay | Square SDK `payments.applePay()` + verificación de dominio |
 | Android | Google Pay | Square SDK `payments.googlePay()` |
-| Todos | PayPal | Square SDK `payments.paypal()` |
 | Todos | Tarjeta | Square Card Element siempre disponible |
 
 ### Flujo técnico
@@ -887,8 +886,7 @@ La app móvil ahora soporta pagos nativos en iOS y Android:
    - Card siempre se inicializa
    - Apple Pay solo en iOS
    - Google Pay solo en Android
-   - PayPal en todos los dispositivos
-   - Los botones se renderizan automáticamente dentro los contenedores `#apple-pay-container`, `#google-pay-container` y `#paypal-container`
+   - Los botones se renderizan automáticamente dentro los contenedores `#apple-pay-container` y `#google-pay-container`
 
 3. **Eventos de tokenización**:
    ```javascript

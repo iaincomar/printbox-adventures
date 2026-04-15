@@ -1,9 +1,10 @@
 Options -MultiViews
 RewriteEngine On
+
 RewriteBase /
 
-# Allow Square fonts
-Header always set Content-Security-Policy "font-src 'self' data: https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; img-src 'self' data: https:; connect-src 'self' https:; frame-src 'self' https:;"
+# CSP disabled for debugging - allows all resources including data URLs
+Header always set Content-Security-Policy "default-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline'; img-src * data:; font-src * data:; connect-src *; frame-src *; object-src *;"
 
 # ¡IMPORTANTE! Las reglas de API DEBEN ir ANTES de la regla de archivos/directorios reales
 # Porque /config/ es una carpeta real que existe, Apache la ve como directorio
@@ -21,18 +22,20 @@ RewriteRule ^process-payment/?$ /proxy.php [PT,L,QSA]
 # Debug endpoint
 RewriteRule ^debug(/.*)?$ /proxy.php [PT,L,QSA]
 
-# Apple Pay domain verification - route to proxy.php
-RewriteRule ^(\.well-known/)?apple-developer-merchantid-domain-association/?$ /proxy.php [PT,L,QSA]
+# Apple Pay domain verification - allow direct access to file
+RewriteCond %{REQUEST_URI} ^/\.well-known/apple-developer-merchantid-domain-association$
+RewriteRule ^ - [L]
 
 # APIs y proxy
 RewriteRule ^health$ /proxy.php [PT,L,QSA]
 RewriteRule ^print/.*$ /proxy.php [PT,L,QSA]
 RewriteRule ^printbox/.*$ /proxy.php [PT,L,QSA]
 RewriteRule ^proxy-image/.*$ /proxy.php [PT,L,QSA]
+RewriteRule ^paypal/.*$ /proxy.php [PT,L,QSA]
 
 # Apple Pay domain verification - headers
 <Files "apple-developer-merchantid-domain-association">
-    Header always set Content-Type "application/json"
+    Header always set Content-Type "text/plain"
     Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
     Header always set Pragma "no-cache"
     Header always set Expires "Thu, 01 Jan 1970 00:00:00 GMT"
