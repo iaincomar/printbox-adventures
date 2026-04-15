@@ -100,6 +100,8 @@ export default function MobileApp() {
   const [squareLoading, setSquareLoading] = useState(false) // Pago Square en progreso
   const [deviceType, setDeviceType] = useState('other')  // Tipo de dispositivo: 'ios', 'android', 'other'
   const [applePayAvailable, setApplePayAvailable] = useState(false) // Apple Pay disponible
+  const [googlePayReady, setGooglePayReady] = useState(false) // Google Pay API lista
+  const [googlePayLoading, setGooglePayLoading] = useState(false) // Pago Google Pay en progreso
   const [paypalClientId, setPaypalClientId] = useState('') // PayPal client ID devuelto por backend
   const [paypalEnv, setPaypalEnv] = useState('sandbox')  // PayPal environment
   const [paypalReady, setPaypalReady] = useState(false)  // PayPal SDK y botones listos

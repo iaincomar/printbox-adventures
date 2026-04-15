@@ -777,7 +777,7 @@ Operador → Botón "Autoplay OFF" para parar
 
 ---
 
-### 💳 Google Pay (Pendiente - Q2 2026)
+### 💳 Google Pay (Implementado - Abril 2026)
 
 **Estado:** Documentado para implementación futura.
 
@@ -1029,4 +1029,4 @@ npm run build
 
 ---
 
-*PrintboxAdventures v1.0.6 · Desarrollado por Alejandro · 2026*
+*PrintboxAdventures v1.0.7 · Desarrollado por Alejandro · 2026*
