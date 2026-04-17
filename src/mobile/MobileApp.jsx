@@ -50,17 +50,6 @@ const SQUARE_LOCATION_ID = 'LHB32XGQK68GX'
 // COMPONENTE PRINCIPAL
 // ============================================
 
-/**
- * Detecta el tipo de dispositivo basado en el user agent
- * @returns {string} 'ios', 'android', o 'other'
- */
-function detectDeviceType() {
-  const ua = navigator.userAgent
-  if (/iPad|iPhone|iPod/.test(ua)) return 'ios'
-  if (/Android/.test(ua)) return 'android'
-  return 'other'
-}
-
 export default function MobileApp() {
   // --- Estados del flujo ---
   const [step, setStep] = useState(STEP_EVENT)           // Paso actual
@@ -70,6 +59,7 @@ export default function MobileApp() {
   const [textos, setTextos] = useState({})               // Textos y precios del evento
   const [loading, setLoading] = useState(false)          // Estado de carga
   const [loadingFromQR, setLoadingFromQR] = useState(false) // Cargando desde QR
+  const [showTermsModal, setShowTermsModal] = useState(false)
 
   // --- Estados de galería ---
   const [photos, setPhotos] = useState([])               // Lista de fotos del evento
@@ -95,15 +85,9 @@ export default function MobileApp() {
   const [sending, setSending] = useState(false)          // Enviando pedido
   const [toast, setToast] = useState(null)               // Mensaje de toast
   const [squareCard, setSquareCard] = useState(null)     // Objeto Square card
-  const [squareApplePay, setSquareApplePay] = useState(null) // Objeto Square Apple Pay
   const [squareError, setSquareError] = useState('')     // Error de Square
   const [squareLoading, setSquareLoading] = useState(false) // Pago Square en progreso
-  const [deviceType, setDeviceType] = useState('other')  // Tipo de dispositivo: 'ios', 'android', 'other'
-  const [applePayAvailable, setApplePayAvailable] = useState(false) // Apple Pay disponible
-  const [googlePayReady, setGooglePayReady] = useState(false) // Google Pay API lista
-  const [googlePayLoading, setGooglePayLoading] = useState(false) // Pago Google Pay en progreso
   const [paypalClientId, setPaypalClientId] = useState('') // PayPal client ID devuelto por backend
-  const [paypalEnv, setPaypalEnv] = useState('sandbox')  // PayPal environment
   const [paypalReady, setPaypalReady] = useState(false)  // PayPal SDK y botones listos
   const [paypalError, setPaypalError] = useState('')    // Error de PayPal
   const [paypalLoading, setPaypalLoading] = useState(false) // Pago PayPal en progreso
@@ -212,9 +196,6 @@ export default function MobileApp() {
       root.style.height = 'auto'
     }
 
-    // Detectar tipo de dispositivo
-    setDeviceType(detectDeviceType())
-
     return () => {
       // Limpiar estilos al desmontar
       document.documentElement.style.overflow = ''
@@ -293,19 +274,6 @@ export default function MobileApp() {
         return
       }
 
-      // Helper para crear PaymentRequest
-      const createPaymentRequestData = () => {
-        const amountInCents = String(Math.round(parseFloat(totalPrice()) * 100))
-        return {
-          countryCode: 'ES',
-          currencyCode: 'EUR',
-          total: {
-            amount: amountInCents,
-            label: 'Compra',
-          },
-        }
-      }
-
       try {
         const payments = window.Square.payments(SQUARE_APP_ID, SQUARE_LOCATION_ID)
 
@@ -314,51 +282,9 @@ export default function MobileApp() {
           const card = await payments.card()
           await card.attach('#card-container')
           setSquareCard(card)
-          console.log('✓ Tarjeta inicializada')
+          console.log('Tarjeta inicializada')
         } catch (e) {
-          console.error('❌ Error tarjeta:', e.message)
-        }
-
-        // Inicializar Apple Pay
-        if (deviceType === 'ios') {
-          console.log('🍎 Intentando inicializar Apple Pay...')
-          try {
-            const applePay = await payments.applePay({
-              createPaymentRequest: createPaymentRequestData,
-            })
-            const appleContainer = document.getElementById('apple-pay-container')
-            console.log('🍎 Contenedor Apple Pay?', !!appleContainer)
-            
-            if (appleContainer) {
-              await applePay.attach('#apple-pay-container')
-              console.log('🍎 Apple Pay attached')
-              setSquareApplePay(applePay)
-              setApplePayAvailable(true)
-              
-              // Listener para el evento de tokenización de Square
-              appleContainer.addEventListener('tokenization', async (e) => {
-                console.log('🍎 Tokenization event:', e.detail)
-                try {
-                  const { token, status } = e.detail || {}
-                  if (status === 'OK' && token) {
-                    await processSquarePayment(token, 'Apple Pay')
-                  } else {
-                    setSquareError('Apple Pay: Error en tokenización')
-                  }
-                } catch (err) {
-                  console.error('🍎 Apple Pay error:', err)
-                  setSquareError(`Apple Pay: ${err.message}`)
-                }
-              })
-              
-              console.log('✅ Apple Pay inicializado')
-            } else {
-              console.error('❌ Contenedor #apple-pay-container no encontrado')
-            }
-          } catch (e) {
-            console.warn('⚠️ Apple Pay no disponible:', e.message)
-            setApplePayAvailable(false)
-          }
+          console.error('Error tarjeta:', e.message)
         }
 
         setSquareError('')
@@ -414,7 +340,6 @@ export default function MobileApp() {
         }
 
         setPaypalClientId(config.clientId)
-        setPaypalEnv(config.env || 'sandbox')
 
         const paypal = await loadPayPalScript(config.clientId)
         if (cancelled) return
@@ -430,40 +355,40 @@ export default function MobileApp() {
             return await createPayPalOrder({ amount, currency: 'EUR' })
           },
           onApprove: async (data) => {
-            console.log('🅿️ PayPal onApprove triggered:', data)
+            console.log('PayPal onApprove triggered:', data)
             setPaypalLoading(true)
             try {
-              console.log('🅿️ Capturing PayPal order:', data.orderID)
+              console.log('Capturing PayPal order:', data.orderID)
               await capturePayPalOrder(data.orderID)
-              console.log('🅿️ PayPal order captured successfully')
+              console.log('PayPal order captured successfully')
               showToast('Pago PayPal completado')
 
               // Intentar enviar fotos después del pago, pero NO bloquear si falla
               try {
-                console.log('🅿️ Sending order photos...')
+                console.log('Sending order photos...')
                 await sendOrderPhotos()
-                console.log('🅿️ Photos sent successfully')
+                console.log('Photos sent successfully')
               } catch (photoError) {
-                console.error('❌ Error enviando fotos (pero pago PayPal fue exitoso):', photoError)
-                showToast('Pago completado. Las fotos se enviarán más tarde.')
+                console.error('Error enviando fotos (pero pago PayPal fue exitoso):', photoError)
+                showToast('Pago completado. Las fotos se enviaran mas tarde.')
               }
 
-              // Avanzar al paso de éxito sea o no haya fallado el envío de fotos
-              console.log('🅿️ Setting step to SUCCESS')
+              // Avanzar al paso de exito sea o no haya fallado el envio de fotos
+              console.log('Setting step to SUCCESS')
               setStep(STEP_SUCCESS)
             } catch (error) {
-              console.error('❌ Error captura PayPal:', error)
+              console.error('Error captura PayPal:', error)
               setPaypalError(error.message || 'Error capturando pago PayPal')
             } finally {
               setPaypalLoading(false)
             }
           },
           onError: (error) => {
-            console.error('❌ PayPal onError:', error)
+            console.error('PayPal onError:', error)
             setPaypalError(error?.message || 'Error en PayPal')
           },
           onCancel: () => {
-            console.log('⚠️ PayPal onCancel: User cancelled payment')
+            console.log('PayPal onCancel: User cancelled payment')
             showToast('Pago PayPal cancelado')
           },
         })
@@ -483,7 +408,7 @@ export default function MobileApp() {
       } catch (e) {
         if (!cancelled) {
           setPaypalError(e.message || 'No se pudo inicializar PayPal')
-          console.warn('PayPal init:', e)
+          console.log('PayPal init:', e)
         }
       }
     }
@@ -493,11 +418,8 @@ export default function MobileApp() {
   }, [step])
 
   const handleSquarePayment = async () => {
-    console.log('💳 handleSquarePayment invocado')
-    console.log('💳 squareCard disponible?', !!squareCard)
-    console.log('💳 squareGooglePay disponible?', !!squareGooglePay)
-    console.log('💳 squareApplePay disponible?', !!squareApplePay)
-    console.log('💳 deviceType:', deviceType)
+    console.log('handleSquarePayment invocado')
+    console.log('squareCard disponible?', !!squareCard)
     
     if (!squareCard) {
       setSquareError('Pasarela de pago no inicializada')
@@ -522,10 +444,10 @@ export default function MobileApp() {
 
       console.log('Respuesta de Square:', body)
       
-      // Si los datos están inválidos en Square pero se procesa de todas formas, notificar al usuario
+      // Si los datos estan invalidos en Square pero se procesa de todas formas, notificar al usuario
       // pero continuar (porque BBVA puede haber procesar el pago)
       if (body?.errors) {
-        console.warn('Square devolvió errores pero continuando:', body.errors)
+        console.error('Square devolvio errores:', body.errors)
         showToast('Pago procesado con advertencias, por favor revisa tu banco')
       }
 
@@ -546,7 +468,7 @@ export default function MobileApp() {
     }
   }
 
-  // Procesar pago desde Apple Pay o Google Pay
+  // Procesar pago desde Square
   const processSquarePayment = async (token, methodName) => {
     setSquareLoading(true)
     try {
@@ -563,7 +485,7 @@ export default function MobileApp() {
       console.log('Respuesta de Square:', body)
 
       if (body?.errors) {
-        console.warn('Square devolvió errores pero continuando:', body.errors)
+        console.error('Square devolvio errores:', body.errors)
         showToast('Pago procesado con advertencias, por favor revisa tu banco')
       }
 
@@ -807,7 +729,7 @@ export default function MobileApp() {
 
     // Agregar a la lista de fotos capturadas
     setCapturedPhotos(prev => [...prev, { dataUrl: resized, copies: 1, id: Date.now() }])
-    showToast('📷 Foto capturada')
+    showToast('Foto capturada')
   }
 
   /**
@@ -853,7 +775,7 @@ export default function MobileApp() {
     setSending(true)
     try {
       await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1 })
-      showToast(`📄 Foto subida correctamente`)
+      showToast('Foto subida correctamente')
       removeCaptured(photo.id)
     } catch (e) {
       showToast(`Error: ${e.message}`)
@@ -1071,11 +993,18 @@ export default function MobileApp() {
           <img src="/assets/ic_launcher.png" alt="Logo" className="mobile-header-ic-launcher-large" />
           <div className="flex-grow-1">
             <div className="mobile-header-title">
-              🇪🇸 Elige tus fotos para imprimir<br />
-              🇬🇧 Choose your photos to print
+              <span style={{ fontSize: '1.2rem', marginRight: '6px' }}>🇪🇸</span> Elige tus fotos para imprimir<br />
+              <small className="text-muted">
+                <span style={{ fontSize: '1rem', marginRight: '6px' }}>🇬🇧</span> Choose your photos to print
+              </small>
             </div>
           </div>
-          <button className="btn btn-sm btn-outline-warning" title="Términos y condiciones" style={{ fontSize: '18px', padding: '2px 6px' }} onClick={() => alert('Tus fotos están protegidas.\n\nNo almacenamos datos personales.')}>
+          <button 
+            className="btn btn-sm btn-outline-warning" 
+            title="Términos y condiciones" 
+            style={{ fontSize: '18px', padding: '2px 6px' }} 
+            onClick={() => setShowTermsModal(true)}
+          >
             <i className="bi bi-info-circle" />
           </button>
         </div>
@@ -1128,6 +1057,27 @@ export default function MobileApp() {
               Ver pedido ({selected.length + capturedPhotos.length} foto
               {selected.length + capturedPhotos.length > 1 ? 's' : ''})
             </button>
+          </div>
+        )}
+
+        {/* Modal de términos y condiciones */}
+        {showTermsModal && (
+          <div className="terms-modal-overlay" onClick={() => setShowTermsModal(false)}>
+            <div className="terms-modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="terms-modal-header">
+                <h5>Términos y condiciones</h5>
+                <button className="terms-modal-close" onClick={() => setShowTermsModal(false)}>&times;</button>
+              </div>
+              <div className="terms-modal-body">
+                <p><strong>Tus fotos están protegidas.</strong> No almacenamos datos personales ni compartimos tus imágenes con terceros.</p>
+                <p>Los pagos se procesan de forma segura a través de <strong>Square</strong> y <strong>PayPal</strong>. No guardamos información de tarjetas.</p>
+                <p>Al usar este servicio, aceptas que las fotos seleccionadas se impriman en el evento. Puedes solicitar la eliminación de tus fotos en cualquier momento al operador.</p>
+                <p><small>Para cualquier consulta, contacta con el organizador del evento.</small></p>
+              </div>
+              <div className="terms-modal-footer">
+                <button className="btn btn-sm btn-secondary" onClick={() => setShowTermsModal(false)}>Cerrar</button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1312,7 +1262,7 @@ export default function MobileApp() {
 
           {/* Métodos de Pago */}
           <div className="payment-methods-section">
-            <h6 className="payment-title">💳 Selecciona tu método de pago</h6>
+            <h6 className="payment-title"><i className="bi bi-credit-card me-2"></i>Selecciona tu metodo de pago</h6>
 
             {/* PayPal */}
             <div className="payment-method-card paypal-card">
@@ -1336,24 +1286,6 @@ export default function MobileApp() {
                 )}
               </div>
             </div>
-
-            {/* Apple Pay */}
-            {applePayAvailable && (
-              <div className="payment-method-card apple-pay-card">
-                <div className="payment-method-header">
-                  <div className="payment-method-icon">
-                    <i className="bi bi-apple"></i>
-                  </div>
-                  <div className="payment-method-info">
-                    <div className="payment-method-name">Apple Pay</div>
-                    <div className="payment-method-desc">Pago rápido con Apple Pay</div>
-                  </div>
-                </div>
-                <div className="payment-method-content">
-                  <div id="apple-pay-container" style={{ minHeight: '48px' }}></div>
-                </div>
-              </div>
-            )}
 
             {/* Tarjeta de Crédito */}
             <div className="payment-method-card card-payment-card">
@@ -1382,7 +1314,7 @@ export default function MobileApp() {
 
           <div className="alert alert-secondary order-payment-note">
             <i className="bi bi-credit-card text-warning" />
-            Pago seguro con tarjeta de crédito, Google Pay o Apple Pay
+            Pago seguro con tarjeta de crédito o PayPal
           </div>
         </div>
 

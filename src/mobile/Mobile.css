@@ -647,11 +647,6 @@ body {
   color: white;
 }
 
-.apple-pay-card .payment-method-icon {
-  background: linear-gradient(135deg, #000000 0%, #333333 100%);
-  color: white;
-}
-
 .card-payment-card .payment-method-icon {
   background: linear-gradient(135deg, #f7c604 0%, #e6b800 100%);
   color: #000;
@@ -698,4 +693,78 @@ body {
 .payment-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* ========== MODAL TÉRMINOS Y CONDICIONES ========== */
+.terms-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(4px);
+}
+
+.terms-modal-content {
+  background: #1a1a2e;
+  border: 1px solid #f7c604;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  animation: fadeInUp 0.2s ease;
+}
+
+.terms-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid #2a2a4e;
+  color: #f7c604;
+}
+
+.terms-modal-header h5 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.terms-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  line-height: 1;
+  color: #aaa;
+  cursor: pointer;
+  transition: color 0.2s;
+  padding: 0;
+}
+
+.terms-modal-close:hover {
+  color: #f7c604;
+}
+
+.terms-modal-body {
+  padding: 16px;
+  color: #e0e0e0;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.terms-modal-body p {
+  margin-bottom: 12px;
+}
+
+.terms-modal-footer {
+  padding: 12px 16px;
+  border-top: 1px solid #2a2a4e;
+  display: flex;
+  justify-content: flex-end;
 }

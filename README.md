@@ -251,7 +251,6 @@ https://printbox.incomar.net/health     →  { "ok": true }
 https://printbox.incomar.net/config     →  { "config": {...}, "textos": {...} }
 ```
 
-
 ---
 
 ## 5. Estructura del proyecto
@@ -326,7 +325,7 @@ printbox-adventures/
 
 ### 6.2 Visor de Evento — `/#/viewer`
 
-**Accesible vía web pública** en `https://printbox.incomar.net/#/viewer`
+**Accesible vía web pública** en `https://printbox.incomar.net/viewer`
 
 1. Siempre pide el código de evento al arrancar
 2. Galería responsive de fotos
@@ -343,7 +342,7 @@ printbox-adventures/
 
 ## 7. App móvil web
 
-Accesible vía web pública en `https://printbox.incomar.net/#/mobile`
+Accesible vía web pública en `https://printbox.incomar.net/mobile`
 
 **Pensada para que el cliente la use desde su móvil o tablet.**
 
@@ -371,7 +370,7 @@ Permite hacer fotos con la cámara del móvil y subirlas al evento.
 
 ### URL con QR
 ```
-https://tudominio.com/#/mobile?evento=1668042
+https://tudominio.com/mobile?evento=1668042
 ```
 El código se rellena automáticamente al escanear.
 
@@ -777,7 +776,7 @@ Operador → Botón "Autoplay OFF" para parar
 
 ---
 
-### 💳 Google Pay (Implementado - Abril 2026)
+### 💳 Google Pay (Pendiente - Q2 2026)
 
 **Estado:** Documentado para implementación futura.
 
@@ -813,7 +812,7 @@ const payWithGooglePay = async (amount) => {
 
 ---
 
-### 🔧 Corrección de URLs de imágenes (CORS fix)
+### 🔒 Apple Pay y Google Pay (Pendiente)
 
 **Problema:**  
 Las imágenes de `https://gestion.printboxweb.com` no cargaban en ViewerApp y MobileApp. El método antiguo (`.replace('gestion.printboxweb.com', '/proxy-image')`) generaba rutas inválidas como `http://proxy-image/...`.
@@ -857,102 +856,36 @@ const getImageUrl = (url) => {
 - `src/viewer/ViewerApp.jsx` (línea 10-20)
 - `src/mobile/MobileApp.jsx` (línea 75-85)
 
-
 ---
 
-## 14.2 Apple Pay y Google Pay (Abril 2026)
+## 14.2 Apple Pay y Google Pay (Pendiente)
 
-### Implementación
+### Estado actual
 
-La app móvil ahora soporta pagos nativos en iOS y Android:
+Apple Pay y Google Pay **no están implementados** actualmente. Se mantienen activos solo:
+- **Tarjeta de crédito/débito** via Square
+- **PayPal** via SDK de PayPal
 
-| Dispositivo | Método de pago | Implementación |
-| --- | --- | --- |
-| iOS | Apple Pay | Square SDK `payments.applePay()` + verificación de dominio |
-| Android | Google Pay | Square SDK `payments.googlePay()` |
-| Todos | Tarjeta | Square Card Element siempre disponible |
+### Apple Pay (Pendiente)
 
-### Flujo técnico
+**Requisitos para implementar:**
+- Verificar dominio `printbox.incomar.net` en Square Developer Dashboard
+- El archivo de verificación ya está desplegado en el servidor
+- Contactar a Square soporte para habilitar Apple Pay en la cuenta
 
-1. **Detección de dispositivo** (`detectDeviceType()`):
-   ```javascript
-   function detectDeviceType() {
-     const ua = navigator.userAgent
-     if (/iPad|iPhone|iPod/.test(ua)) return 'ios'
-     if (/Android/.test(ua)) return 'android'
-     return 'other'
-   }
-   ```
-
-2. **Inicialización en `src/mobile/MobileApp.jsx`**:
-   - Card siempre se inicializa
-   - Apple Pay solo en iOS
-   - Google Pay solo en Android
-   - Los botones se renderizan automáticamente dentro los contenedores `#apple-pay-container` y `#google-pay-container`
-
-3. **Eventos de tokenización**:
-   ```javascript
-   // Los botones de Square lanzan eventos automáticos
-   applePay.addEventListener('tokenization', async (event) => {
-     const { token, status } = event.detail
-     if (status === 'OK') {
-       await processSquarePayment(token, 'Apple Pay')
-     }
-   })
-   ```
-
-### Verificación de dominio Apple Pay
-
-Square requiere una verificación de dominio para activar Apple Pay.
-
-**Archivo de verificación:**
+**Archivo preparado:**
 ```
 .well-known/apple-developer-merchantid-domain-association
 ```
 
-**Configuración `.htaccess`:**
-```apache
-<Files "apple-developer-merchantid-domain-association">
-    Header always set Content-Type "application/json"
-    Header always set Cache-Control "no-cache, no-store, must-revalidate, max-age=0"
-    Header always set Pragma "no-cache"
-    Header always set Expires "Thu, 01 Jan 1970 00:00:00 GMT"
-    Header always set Access-Control-Allow-Origin "*"
-    Header always set Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
-    Header always set Access-Control-Allow-Headers "Content-Type, Authorization"
-</Files>
-```
+### Google Pay (Pendiente)
 
-**Ubicación en producción (IONOS):**
-- Primary: `https://printbox.incomar.net/.well-known/apple-developer-merchantid-domain-association`
-- Backup: `https://printbox.incomar.net/apple-developer-merchantid-domain-association` (raíz)
+**Requisitos para implementar:**
+- Registrar merchant en Google Pay Dashboard
+- Configurar Square como gateway (alternative: Stripe)
+- Implementación con Google Pay Web API
 
-**Build**: El archivo se copia automáticamente con `npm run build`:
-```bash
-postbuild: "copy .htaccess dist\ && copy proxy.php dist\ && xcopy .well-known dist\.well-known\ /E /I /Y"
-```
-
-### Debug
-
-```javascript
-// En la consola del navegador (DevTools → Console)
-// Verifica el estado de inicialización de Square
-console.log('Square Card:', !!squareCard)
-console.log('Square Apple Pay:', !!squareApplePay)
-console.log('Square Google Pay:', !!squareGooglePay)
-```
-
-En Android:
-```
-Tarjeta ✓ → Inicializada
-Google Pay ✗ → No disponible (requiere Google Play Services)
-```
-
-### Archivos modificados
-- `src/mobile/MobileApp.jsx` — Detección de dispositivo, inicialización de Apple Pay/Google Pay, listeners de eventos
-- `.htaccess` — Headers para archivo de verificación
-- `.well-known/apple-developer-merchantid-domain-association` — Archivo de verificación desde Square Dashboard
-- `package.json` → `postbuild` — Copia el archivo de verificación al dist
+**Opción recomendada:** Usar **Stripe** para Google Pay en lugar de Square, ya que Stripe tiene mejor documentación y configuración más sencilla.
 
 ---
 
@@ -963,8 +896,8 @@ Google Pay ✗ → No disponible (requiere Google Play Services)
 - [ ] Notificación toast al imprimir
 - [ ] Sonido de confirmación al imprimir
 - [x] Pago integrado (Square/BBVA) ✅ Abril 2026 - PRODUCTION
-- [x] Apple Pay (iOS) ✅ Abril 2026
-- [x] Google Pay (Android) ✅ Abril 2026
+- [ ] Apple Pay (iOS) - Pendiente (requiere verificación de dominio en Square)
+- [ ] Google Pay (Android) - Pendiente (requiere configuración en Google Pay Dashboard)
 
 ### Viewer
 - [x] QR dinámico con código de evento en la URL ✅ Marzo 2026
