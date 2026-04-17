@@ -227,6 +227,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // Obtener el código de evento del query string (para cargar precios específicos de cada evento)
     $eventCode = $_GET['eventCode'] ?? '';
+    $eventCode = preg_replace('/^ev[-_]?/i', '', $eventCode);
     
     $config = [
         'servidor'  => 'http://gestion.printboxweb.com',
@@ -297,6 +298,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Obtener el código de evento del query string (para guardar precios específicos de cada evento)
     $eventCode = $_GET['eventCode'] ?? '';
+    $eventCode = preg_replace('/^ev[-_]?/i', '', $eventCode);
     
     $writeErrors = [];
 
@@ -541,8 +543,36 @@ if (strpos($uri, '/printbox/') === 0) {
         exit();
     }
 
+    if ($uri === '/printbox/otp/request') {
+        $result = proxyPost($PRINTBOX_BASE . '/api/v1/otp/request', $data, $headers);
+        http_response_code($result['code'] ?: 500);
+        echo $result['body'] ?: json_encode(['error' => 'Sin respuesta']);
+        exit();
+    }
+
+    if ($uri === '/printbox/otp/validate') {
+        $result = proxyPost($PRINTBOX_BASE . '/api/v1/otp/validate', $data, $headers);
+        http_response_code($result['code'] ?: 500);
+        echo $result['body'] ?: json_encode(['error' => 'Sin respuesta']);
+        exit();
+    }
+
     if ($uri === '/printbox/photo-send') {
-        $result = proxyPost($PRINTBOX_BASE . '/api/v1/events/photo/send', $data, $headers);
+        $payload = [
+            'event' => $data['event'] ?? '',
+            'image' => $data['image'] ?? '',
+            'times' => $data['times'] ?? 1,
+            'name' => $data['name'] ?? ('photo-' . time()),
+            'print' => isset($data['print']) ? $data['print'] : (!empty($data['times']) ? true : false),
+        ];
+        if (!empty($data['phone'])) {
+            $payload['phone'] = $data['phone'];
+        }
+        if (!empty($data['orientation'])) {
+            $payload['orientation'] = $data['orientation'];
+        }
+
+        $result = proxyPost($PRINTBOX_BASE . '/api/v1/events/photo/send', $payload, $headers);
         http_response_code($result['code'] ?: 500);
         echo $result['body'] ?: json_encode(['error' => 'Sin respuesta']);
         exit();

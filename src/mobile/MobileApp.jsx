@@ -35,10 +35,10 @@ function resizeImageBase64(dataUrl, maxSize = 1200) {
 // ============================================
 const STEP_EVENT = 'event'      // Paso 1: Ingresar código del evento
 const STEP_GALLERY = 'gallery'  // Paso 2: Ver galería y seleccionar fotos
-const STEP_CAMERA = 'camera'    // Paso 3: Tomar fotos con la cámara
-const STEP_ORDER = 'order'      // Paso 4: Resumen del pedido
-const STEP_PAYMENT = 'payment'  // Paso 5: Pasarela de pago (Square)
-const STEP_SUCCESS = 'success'  // Paso 6: Confirmación de envío
+const STEP_CAMERA = 'camera'    // Paso 4: Tomar fotos con la cámara
+const STEP_ORDER = 'order'      // Paso 5: Resumen del pedido
+const STEP_PAYMENT = 'payment'  // Paso 6: Pasarela de pago (Square)
+const STEP_SUCCESS = 'success'  // Paso 7: Confirmación de envío
 
 // ============================================
 // CONSTANTES DE SQUARE (Production)
@@ -58,6 +58,10 @@ export default function MobileApp() {
   const [uuid, setUuid] = useState(null)                 // UUID del evento (devuelto por API)
   const [textos, setTextos] = useState({})               // Textos y precios del evento
   const [loading, setLoading] = useState(false)          // Estado de carga
+
+  const normalizeEventCode = (code = '') => {
+    return String(code).trim().replace(/^ev[-_]?/i, '')
+  }
   const [loadingFromQR, setLoadingFromQR] = useState(false) // Cargando desde QR
   const [showTermsModal, setShowTermsModal] = useState(false)
 
@@ -231,7 +235,8 @@ export default function MobileApp() {
       if (saved && saved.eventCode && saved.step !== STEP_EVENT) {
         if (saved.photos && saved.photos.length > 0) {
           // Ya tenemos fotos en localStorage, no forzar recarga inmediata
-          setStep(saved.step || STEP_GALLERY)
+          const normalizedStep = saved.step === 'otp' ? STEP_GALLERY : saved.step
+          setStep(normalizedStep || STEP_GALLERY)
           setUuid(saved.uuid || null)
           setLoadingFromQR(false)
         } else {
@@ -546,7 +551,7 @@ export default function MobileApp() {
    * Conectar al evento con el código ingresado
    */
   async function handleConnectEvent(code = null) {
-    const eventCodeToUse = code || eventCode.trim()
+    const eventCodeToUse = normalizeEventCode(code || eventCode)
     if (!eventCodeToUse) {
       setEventError('Introduce el número del evento')
       return
@@ -587,6 +592,9 @@ export default function MobileApp() {
       setLoading(false)
     }
   }
+
+  // ============================================
+  // PASO 2: OTP - VERIFICACIÓN DE USUARIO
 
   // ============================================
   // PASO 2: GALERÍA - CARGAR FOTOS

@@ -61,7 +61,44 @@ Apache hacía un redirect 301 de `/config` → `/config/`. Los navegadores al se
 `saveConfig()` en `api.js` usa `/config/` con barra final para evitar el redirect.
 
 ---
+## ✅ Cambio de flujo: OTP removido del móvil (abril 2026)
 
+### Qué cambió
+- Se eliminó el paso de verificación SMS/OTP en `mobile/MobileApp.jsx`.
+- Ahora la app móvil conecta el evento y carga directamente la galería de fotos.
+
+### Por qué
+- El OTP no es necesario para el envío de fotos al evento en el flujo actual.
+- Se simplifica el acceso móvil y se evita dependencias con SMS.
+
+---
+## ✅ Viewer envía la foto directo al evento impresora tras pago (abril 2026)
+
+### Qué cambió
+- El viewer ya no utiliza una acción manual de “copiar fotos al evento impresora”.
+- Tras el pago, la foto se envía directamente al `evento_printer` configurado.
+
+### Beneficio
+- El pedido se completa con el pago y la foto se dirige automáticamente al evento de impresión sin intervención extra.
+
+---
+## ✅ API de envío de fotos a evento
+
+### Flujo actual
+- La app llama a `sendPhoto()` en `src/shared/api.js`.
+- Ese helper envía a `/printbox/photo-send` en el backend local/proxy.
+- `backend/routes/printbox.js` y `proxy.php` proxifican a `/api/v1/events/photo/send`.
+
+### Payload básico
+- `event` (UUID del evento)
+- `image` (Base64 de la foto)
+- `times` (número de copias)
+- `name`, `print`, `phone`, `orientation` son opcionales y ahora se envían con valores por defecto cuando están ausentes.
+
+### Nota
+- El endpoint `/api/v1/events/send` no se utiliza actualmente en este proyecto.
+
+---
 ## Bug corregido: localStorage sobreescribía precios del servidor (abril 2026)
 
 **Síntoma**
@@ -74,8 +111,20 @@ El merge en la inicialización tenía orden incorrecto: localStorage pisaba al s
 - Orden del merge invertido: `{ defaults, ...localStorage, ...servidor }` → servidor siempre gana
 - Tras guardar en Admin se hace `localStorage.removeItem('printbox_viewer_state')` para limpiar datos cacheados
 
----
+---## ✅ Bug corregido: prefijo `ev-` no cargaba precios de evento (abril 2026)
 
+**Síntoma**
+Cuando un código de evento venía como `ev-123456`, la app no encontraba el fichero de precios correcto y cargaba valores por defecto.
+
+**Causa**
+El código de evento se enviaba tal cual al backend, que buscaba `textos_ev-123456.txt` en lugar de `textos_123456.txt`.
+
+**Corrección**
+- `src/shared/api.js` normaliza `ev-`/`ev_` antes de llamar a `/config`
+- `src/mobile/MobileApp.jsx` normaliza el código antes de buscar el evento
+- `proxy.php` normaliza el parámetro `eventCode` en GET y POST
+
+---
 ## Notas de entorno
 
 - Local dev: `src/shared/api.js` usa `http://localhost:4000`

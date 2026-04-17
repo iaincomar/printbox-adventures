@@ -545,6 +545,7 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ Reconexión automática | `PrinterApp.jsx` | Si la API cae, reintenta cada 5s→10s→...→30s automáticamente |
 | ✅ Alerta impresora offline | `PrinterApp.jsx` | Barra roja si la impresora no se encuentra. Comprueba cada 30s |
 | ✅ App móvil web | `mobile/MobileApp.jsx` | Galería completa, cámara, selección, pedido y precios |
+| ✅ OTP opcional eliminado | `mobile/MobileApp.jsx` | Ahora el evento se conecta directamente a la galería sin verificación SMS opcional |
 | ✅ Auto-actualización | `electron/main.js` | Comprueba GitHub Releases al arrancar. Barra amarilla de aviso + instala al cerrar |
 | ✅ Proxy de imágenes | `viewer/ViewerApp.jsx`, `mobile/MobileApp.jsx` | Convierte URLs de imágenes a rutas relativas para evitar CORS |
 | ✅ QR código evento | `viewer/ViewerApp.jsx` | Botón para mostrar QR → escanear acceso directo a app móvil (Marzo 2026) |
@@ -563,6 +564,8 @@ App → POST /config  → escribe servidor_api.txt + textos.txt
 | ✅ Flujo simplificado mobile | `mobile/MobileApp.jsx` | Botón editar removido, sin "Hacer foto nueva", texto bilingüe (Marzo 2026) |
 | ✅ Pago mobile actualizado | `mobile/MobileApp.jsx` | Cambio de "datáfono" a "tarjeta, Google Pay, etc." (Marzo 2026) |
 | ✅ Pago integrado Square | `proxy.php`, `MobileApp.jsx`, `ViewerApp.jsx` | Payments API de Square/BBVA. Tokenización PCI-compliant (Abril 2026) |
+| ✅ Envío directo a impresora tras pago | `ViewerApp.jsx`, `src/shared/api.js` | La foto del pedido se envía automáticamente al evento de la impresora después del pago, sin copia manual | 
+| ✅ Compatibilidad de evento `ev-` | `src/shared/api.js`, `src/mobile/MobileApp.jsx`, `proxy.php` | Normaliza códigos `ev-123` para cargar precios correctos desde `textos_123.txt` (Abril 2026) |
 | ✅ Config independiente por evento | `proxy.php`, `api.js` | Cada evento guarda precios en archivo `textos_<eventCode>.txt` (Abril 2026) |
 | ✅ Admin evento independiente | `ViewerApp.jsx` | Admin puede cambiar precios específicos de cada evento sin afectar otros (Abril 2026) |
 | ✅ Flujo post-pago robusto | `MobileApp.jsx`, `ViewerApp.jsx` | Pago exitoso no se bloquea por error de envío de fotos (Abril 2026) |

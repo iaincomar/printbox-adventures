@@ -43,6 +43,75 @@ export async function getPhotosToPrint(uuid) {
   return data.values || []
 }
 
+function formatApiError(data, defaultMessage) {
+  if (!data) return defaultMessage
+  if (data?.message && typeof data.message === 'string') {
+    const errors = data.errors
+    if (errors && typeof errors === 'object') {
+      const detail = Object.values(errors).flat().join(' ')
+      return detail ? `${data.message}: ${detail}` : data.message
+    }
+    return data.message
+  }
+  if (data?.error) {
+    if (typeof data.error === 'string') return data.error
+    if (data.error?.message) return data.error.message
+  }
+  return defaultMessage
+}
+
+function normalizePhone(phone, country) {
+  if (!phone) return phone
+  const trimmed = phone.trim()
+  if (trimmed.startsWith('+')) {
+    return trimmed
+  }
+  if (trimmed.startsWith('00')) {
+    return '+' + trimmed.slice(2)
+  }
+
+  const digits = trimmed.replace(/\D/g, '')
+  if (!digits) return trimmed
+
+  switch ((country || '').toUpperCase()) {
+    case 'ES':
+      if (digits.length === 9) return '+34' + digits
+      if (digits.length === 11 && digits.startsWith('34')) return '+' + digits
+      return '+34' + digits
+    case 'US':
+    case 'CA':
+      if (digits.length === 10) return '+1' + digits
+      if (digits.length === 11 && digits.startsWith('1')) return '+' + digits
+      return '+1' + digits
+    default:
+      return '+' + digits
+  }
+}
+
+export async function requestOtp({ phone, phone_country = 'ES' }) {
+  const normalizedPhone = normalizePhone(phone, phone_country)
+  const res = await fetch(`${BACKEND_URL}/printbox/otp/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: normalizedPhone, phone_country }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(formatApiError(data, 'Error solicitando OTP'))
+  return data
+}
+
+export async function validateOtp({ phone, phone_country = 'ES', crypt_otp }) {
+  const normalizedPhone = normalizePhone(phone, phone_country)
+  const res = await fetch(`${BACKEND_URL}/printbox/otp/validate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone: normalizedPhone, phone_country, crypt_otp }),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(formatApiError(data, 'Error validando OTP'))
+  return data
+}
+
 // ─── Backend local ───────────────────────────────────────────────────────────
 
 export async function getPrinters() {
@@ -78,10 +147,15 @@ export async function printJob({ imageUrl, imageName, printer, delay = 5 }) {
   return res.json()
 }
 
+function normalizeEventCode(eventCode = '') {
+  if (!eventCode) return ''
+  return String(eventCode).trim().replace(/^ev[-_]?/i, '')
+}
+
 export async function getConfig(eventCode = '') {
-  // Si eventCode se proporciona, cargar config específica de ese evento
-  // Si no, cargar config global (para compatibilidad)
-  const queryParam = eventCode ? `?eventCode=${encodeURIComponent(eventCode)}` : ''
+  // Si eventCode incluye prefijo 'ev-' o 'ev_', se elimina antes de hacer la petición
+  const normalizedEventCode = normalizeEventCode(eventCode)
+  const queryParam = normalizedEventCode ? `?eventCode=${encodeURIComponent(normalizedEventCode)}` : ''
   const url = `${BACKEND_URL}/config/${queryParam}`
   try {
     const res = await fetch(url)
@@ -137,12 +211,12 @@ export async function getConfig(eventCode = '') {
 }
 
 export async function saveConfig(config, textos, eventCode = '') {
-  // Si eventCode se proporciona, guardar config específica de ese evento
-  // Si no, guardar config global (para compatibilidad)
+  // Si eventCode incluye prefijo 'ev-' o 'ev_', se elimina antes de guardar.
   // IMPORTANTE: usar /config/ con barra final para evitar redirect 301 de Apache.
   // Sin la barra, Apache redirige /config → /config/ y el redirect convierte POST en GET,
   // perdiendo el body (los precios llegan vacíos al servidor).
-  const queryParam = eventCode ? `?eventCode=${encodeURIComponent(eventCode)}` : ''
+  const normalizedEventCode = normalizeEventCode(eventCode)
+  const queryParam = normalizedEventCode ? `?eventCode=${encodeURIComponent(normalizedEventCode)}` : ''
   const url = `${BACKEND_URL}/config/${queryParam}`
   try {
     const res = await fetch(url, {
@@ -235,7 +309,13 @@ export async function processPayment({ token, amount, currency = 'EUR', location
   }
 }
 
-export async function sendPhoto({ event, image, times = 1 }) {
+export async function sendPhoto({ event, image, times = 1, name, phone, print, orientation }) {
+  const body = { event, image, times }
+  if (name) body.name = name
+  if (typeof print !== 'undefined') body.print = print
+  if (phone) body.phone = phone
+  if (orientation) body.orientation = orientation
+
   const res = await fetch(`${BACKEND_URL}/printbox/photo-send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
