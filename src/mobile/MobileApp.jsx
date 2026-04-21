@@ -73,7 +73,8 @@ export default function MobileApp() {
   const [loadingMore, setLoadingMore] = useState(false)  // Cargando más fotos (infinite scroll)
   const loaderRef = useRef(null)                         // Referencia para el observer de infinite scroll
   const uuidRef = useRef(null)                           // Referencia mutable del UUID
-
+  const [printerUuid, setPrinterUuid] = useState(null)   // UUID del evento de impresión
+  const lastPrinterCodeRef = useRef(null)
   // --- Estados de selección ---
   const [selected, setSelected] = useState([])           // Fotos seleccionadas de la galería [{uri, uri_full, copies}]
 
@@ -110,6 +111,22 @@ export default function MobileApp() {
       empresa: incoming.empresa || prev?.empresa || ''
     }))
   }
+
+  const loadPrinterEvent = useCallback(async (eventCodePrinter) => {
+    if (!eventCodePrinter || eventCodePrinter.trim() === '') {
+      setPrinterUuid(null)
+      return
+    }
+    try {
+      // findEvent espera formato "ev-XXXX"
+      const printerUuidResult = await findEvent(`ev-${eventCodePrinter}`)
+      setPrinterUuid(printerUuidResult)
+      console.log(`Evento impresora cargado: ${eventCodePrinter} -> ${printerUuidResult}`)
+    } catch (e) {
+      console.error('Error cargando evento impresora:', e)
+      setPrinterUuid(null)
+    }
+  }, [])
 
   // ============================================
   // FUNCIÓN PARA OBTENER URL DE IMAGEN CON PROXY
@@ -261,13 +278,25 @@ export default function MobileApp() {
   // Si no, cargar config global
   useEffect(() => {
     const interval = setInterval(() => {
-      // Pasar el código de evento si está disponible, para cargar precios específicos de ese evento
       getConfig(eventCode || undefined).then(d => {
         if (d.textos) applyTextos(d.textos)
-      }).catch(() => {})
+        // Cargar evento_printer solo si el código cambió
+        if (d.config?.evento_printer) {
+          const printerCode = d.config.evento_printer.replace(/^ev[-_]?/i, '')
+          if (printerCode && printerCode !== lastPrinterCodeRef.current) {
+            lastPrinterCodeRef.current = printerCode
+            loadPrinterEvent(printerCode)
+          }
+        } else {
+          if (lastPrinterCodeRef.current !== null) {
+            lastPrinterCodeRef.current = null
+            setPrinterUuid(null)
+          }
+        }
+      }).catch(() => { })
     }, 5000)
     return () => clearInterval(interval)
-  }, [eventCode])
+  }, [eventCode, loadPrinterEvent])
 
   // Inicializar pasarela de pago en el paso de pedido
   useEffect(() => {
@@ -425,7 +454,7 @@ export default function MobileApp() {
   const handleSquarePayment = async () => {
     console.log('handleSquarePayment invocado')
     console.log('squareCard disponible?', !!squareCard)
-    
+
     if (!squareCard) {
       setSquareError('Pasarela de pago no inicializada')
       return
@@ -448,7 +477,7 @@ export default function MobileApp() {
       })
 
       console.log('Respuesta de Square:', body)
-      
+
       // Si los datos estan invalidos en Square pero se procesa de todas formas, notificar al usuario
       // pero continuar (porque BBVA puede haber procesar el pago)
       if (body?.errors) {
@@ -463,7 +492,7 @@ export default function MobileApp() {
         console.error('Error enviando fotos (pero pago fue exitoso):', photoError)
         showToast('Pago completado. Las fotos se enviarán más tarde.')
       }
-      
+
       // Avanzar al paso de éxito sea o no haya fallado el envío de fotos
       setStep(STEP_SUCCESS)
     } catch (e) {
@@ -562,6 +591,17 @@ export default function MobileApp() {
       const id = await findEvent(`ev-${eventCodeToUse}`)
       setUuid(id)
       uuidRef.current = id
+
+      const configData = await getConfig(eventCodeToUse)
+      if (configData.textos) applyTextos(configData.textos)
+      // Cargar evento impresora si existe
+      if (configData.config?.evento_printer) {
+        const printerCode = configData.config.evento_printer.replace(/^ev[-_]?/i, '')
+        if (printerCode) {
+          await loadPrinterEvent(printerCode)
+          lastPrinterCodeRef.current = printerCode
+        }
+      }
 
       // Recargar config para precios actualizados del evento específico
       try {
@@ -782,7 +822,15 @@ export default function MobileApp() {
   async function uploadPhotoDirectly(photo) {
     setSending(true)
     try {
-      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, phone: '000000000', orientation: 'portrait' })
+      const targetUuid = printerUuid || uuid
+      if (!targetUuid) throw new Error('No hay evento destino')
+      await sendPhoto({
+        event: targetUuid,   // ← cambio
+        image: photo.dataUrl,
+        times: 1,
+        phone: '000000000',
+        orientation: 'portrait'
+      })
       showToast('Foto subida correctamente')
       removeCaptured(photo.id)
     } catch (e) {
@@ -845,7 +893,10 @@ export default function MobileApp() {
    * Enviar el pedido al servidor
    */
   async function sendOrderPhotos() {
-    // Enviar fotos de la galería seleccionadas
+    const targetUuid = printerUuid || uuid   // Usar evento impresora si existe, si no el principal
+    if (!targetUuid) throw new Error('No hay evento destino')
+
+    // Enviar fotos de la galería
     for (const photo of selected) {
       const proxyUrl = getImageUrl(photo.uri_full || photo.uri)
       const resp = await fetch(proxyUrl)
@@ -856,12 +907,24 @@ export default function MobileApp() {
         reader.readAsDataURL(blob)
       })
       const resized = await resizeImageBase64(base64, 1400)
-      await sendPhoto({ event: uuid, image: resized, times: photo.copies, phone: '000000000', orientation: 'portrait' })
+      await sendPhoto({
+        event: targetUuid,
+        image: resized,
+        times: photo.copies,
+        phone: '000000000',
+        orientation: 'portrait'
+      })
     }
 
-    // Enviar fotos tomadas con la cámara
+    // Enviar fotos de cámara
     for (const photo of capturedPhotos) {
-      await sendPhoto({ event: uuid, image: photo.dataUrl, times: photo.copies, phone: '000000000', orientation: 'portrait' })
+      await sendPhoto({
+        event: targetUuid,
+        image: photo.dataUrl,
+        times: photo.copies,
+        phone: '000000000',
+        orientation: 'portrait'
+      })
     }
     return true
   }
@@ -917,17 +980,6 @@ export default function MobileApp() {
       await handleSquarePayment()
     }
   }
-
-  // ============================================
-  // INTERVALO PARA ACTUALIZAR PRECIOS
-  // ============================================
-  useInterval(() => {
-    getConfig(eventCode || undefined).then(d => {
-      if (d.textos) applyTextos(d.textos)
-    }).catch(err => {
-      console.error('Error actualizando precios:', err)
-    })
-  }, 5000) // Cada 5 segundos
 
   // ============================================
   // RENDER POR PASO
@@ -1007,10 +1059,10 @@ export default function MobileApp() {
               </small>
             </div>
           </div>
-          <button 
-            className="btn btn-sm btn-outline-warning" 
-            title="Términos y condiciones" 
-            style={{ fontSize: '18px', padding: '2px 6px' }} 
+          <button
+            className="btn btn-sm btn-outline-warning"
+            title="Términos y condiciones"
+            style={{ fontSize: '18px', padding: '2px 6px' }}
             onClick={() => setShowTermsModal(true)}
           >
             <i className="bi bi-info-circle" />
@@ -1152,7 +1204,7 @@ export default function MobileApp() {
                     for (const photo of capturedPhotos) {
                       await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, phone: '000000000', orientation: 'portrait' })
                     }
-                    showToast(`📸 ${capturedPhotos.length} foto(s) subida(s)`)
+                    showToast(`${capturedPhotos.length} foto(s) subida(s)`)
                     setCapturedPhotos([])
                   } catch (e) {
                     showToast(`Error: ${e.message}`)
