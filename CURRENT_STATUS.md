@@ -2,21 +2,23 @@
 
 ---
 
-## ✅ Fix: sendPhoto no incluía phone y orientation (abril 2026)
+## ✅ Fix: sendPhoto no incluía phone y orientation (abril 2026) - IMPLEMENTADO
 
 ### Problema
-El viewer enviaba fotos al evento impresora tras el pago, pero el backend de Printbox requería `phone` y `orientation` obligatorios, causando error 422.
+El viewer y app móvil enviaban fotos al evento tras el pago, pero el backend de Printbox requería `phone` y `orientation` obligatorios, causando error 422.
 
 ### Causa
-En `api.js` la función `sendPhoto()` construía el body correctamente pero en el fetch se enviaba solo `{ event, image, times }` ignorando los campos opcionales.
+Las funciones `sendPhoto()` en MobileApp.jsx no pasaban `phone` y `orientation` al payload, aunque `api.js` ya los soportaba.
 
-### Corrección
-- `src/shared/api.js`: Corregido el fetch para usar `JSON.stringify(body)` completo en lugar de hardcodear `{ event, image, times }`
-- `src/viewer/ViewerApp.jsx`: Ahora envía `phone: '000000000'` y `orientation: 'landscape'` como valores por defecto para el visor público
+### Corrección implementada
+- `src/viewer/ViewerApp.jsx`: Ya incluía `phone: '000000000'` y `orientation: 'landscape'` ✓
+- `src/mobile/MobileApp.jsx`: Actualizado para enviar `phone: '000000000'` y `orientation: 'portrait'` en:
+  - `uploadPhotoDirectly()` - línea 785
+  - `sendOrderPhotos()` - líneas 859 y 864 (fotos de galería y cámara)
+  - Botón "Subir fotos directamente" - línea 1153
 
 ### Archivos modificados
-- `src/shared/api.js` → línea 322: `body: JSON.stringify(body)`
-- `src/viewer/ViewerApp.jsx` → línea 569-575: envía phone y orientation
+- `src/mobile/MobileApp.jsx` → 4 llamadas a `sendPhoto()` ahora incluyen campos obligatorios
 
 ---
 

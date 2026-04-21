@@ -782,7 +782,7 @@ export default function MobileApp() {
   async function uploadPhotoDirectly(photo) {
     setSending(true)
     try {
-      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1 })
+      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, phone: '000000000', orientation: 'portrait' })
       showToast('Foto subida correctamente')
       removeCaptured(photo.id)
     } catch (e) {
@@ -856,12 +856,12 @@ export default function MobileApp() {
         reader.readAsDataURL(blob)
       })
       const resized = await resizeImageBase64(base64, 1400)
-      await sendPhoto({ event: uuid, image: resized, times: photo.copies })
+      await sendPhoto({ event: uuid, image: resized, times: photo.copies, phone: '000000000', orientation: 'portrait' })
     }
 
     // Enviar fotos tomadas con la cámara
     for (const photo of capturedPhotos) {
-      await sendPhoto({ event: uuid, image: photo.dataUrl, times: photo.copies })
+      await sendPhoto({ event: uuid, image: photo.dataUrl, times: photo.copies, phone: '000000000', orientation: 'portrait' })
     }
     return true
   }
@@ -1150,7 +1150,7 @@ export default function MobileApp() {
                   setSending(true)
                   try {
                     for (const photo of capturedPhotos) {
-                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1 })
+                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, phone: '000000000', orientation: 'portrait' })
                     }
                     showToast(`📸 ${capturedPhotos.length} foto(s) subida(s)`)
                     setCapturedPhotos([])
@@ -1358,7 +1358,7 @@ export default function MobileApp() {
   if (step === STEP_SUCCESS) {
     return (
       <div className="mobile-app success-container">
-        <div className="success-icon">🎉</div>
+        <img src="/assets/logo-adventure.png" alt="Success" className="success-image" />
         <h2 className="success-title">¡Pedido enviado!</h2>
         <p className="success-text">
           Tu pedido ha sido enviado. Tus fotos se imprimirán en breve.
