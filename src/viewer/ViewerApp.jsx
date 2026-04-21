@@ -566,7 +566,13 @@ export default function ViewerApp() {
             reader.readAsDataURL(blob)
           })
           
-          await sendPhoto({ event: config.evento_printer, image: base64, times: copies })
+          await sendPhoto({
+            event: config.evento_printer,
+            image: base64,
+            times: copies,
+            phone: '000000000',  // Valor por defecto para viewer público
+            orientation: 'landscape'  // Valor por defecto
+          })
         } catch (photoError) {
           console.error('Error enviando foto a impresora (pero pago fue exitoso):', photoError)
           // Continuar de todas formas, pago ya se hizo

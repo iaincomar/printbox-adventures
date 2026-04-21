@@ -241,7 +241,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'GET') {
     $apiFile = $configDir . '/servidor_api.txt';
     if (file_exists($apiFile)) {
         $lines = file($apiFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $keys  = ['servidor', 'evento', 'timer', 'impresora', 'delay'];
+        $keys  = ['servidor', 'evento', 'evento_printer', 'timer', 'impresora', 'delay'];
         foreach ($lines as $i => $line) {
             $val = trim(strpos($line, ';') !== false ? explode(';', $line, 2)[1] : $line);
             if (isset($keys[$i]))
@@ -307,6 +307,7 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         $success = file_put_contents($configDir . '/servidor_api.txt', implode("\n", [
             'servidor;' . ($c['servidor'] ?? 'http://gestion.printboxweb.com'),
             'evento;'   . ($c['evento']    ?? ''),
+            'evento_printer;'   . ($c['evento_printer']    ?? ''),
             'timer;'    . ($c['timer']     ?? 5),
             'impresora;'. ($c['impresora'] ?? ''),
             'delay;'    . ($c['delay']     ?? 5),
@@ -374,14 +375,14 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     clearstatcache(true, $textosFile);
 
     // Leer y devolver los valores actualizados inmediatamente
-    $config = ['servidor' => 'http://gestion.printboxweb.com', 'evento' => '', 'timer' => 5, 'impresora' => '', 'delay' => 5];
+    $config = ['servidor' => 'http://gestion.printboxweb.com', 'evento' => '', 'evento_printer' => '', 'timer' => 5, 'impresora' => '', 'delay' => 5];
     $textos = ['text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '', 'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => ''];
 
     $apiFile = $configDir . '/servidor_api.txt';
     if (file_exists($apiFile)) {
         $lines = file($apiFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
         if ($lines) {
-            $keys = ['servidor', 'evento', 'timer', 'impresora', 'delay'];
+            $keys = ['servidor', 'evento', 'evento_printer', 'timer', 'impresora', 'delay'];
             foreach ($lines as $i => $line) {
                 if (!isset($keys[$i])) break;
                 $val = trim(strpos($line, ';') !== false ? explode(';', $line, 2)[1] : $line);
@@ -641,7 +642,7 @@ if ($uri === '/process-payment') {
     $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
     $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
 
-    $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
+    $amount = isset($data['amount']) ? intval($data['amount']) : 0;  // Ya viene en centavos desde el viewer
     $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
 
     if (!$data['token'] || $amount <= 0) {
@@ -791,7 +792,7 @@ if ($_GET['route'] === 'process-payment') {
     $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
     $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
 
-    $amount = isset($data['amount']) ? round(floatval($data['amount']) * 100) : 0;
+    $amount = isset($data['amount']) ? intval($data['amount']) : 0;  // Ya viene en centavos desde el viewer
     $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
 
     if (!$data['token'] || $amount <= 0) {

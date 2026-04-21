@@ -319,7 +319,7 @@ export async function sendPhoto({ event, image, times = 1, name, phone, print, o
   const res = await fetch(`${BACKEND_URL}/printbox/photo-send`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ event, image, times }),
+    body: JSON.stringify(body),
   })
   const data = await res.json()
   if (!res.ok) throw new Error(data?.error?.message || data?.message || 'Error al enviar foto')

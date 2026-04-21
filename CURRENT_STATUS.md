@@ -2,7 +2,51 @@
 
 ---
 
-## ✅ Implementado: Pagos con Tarjeta y PayPal (Abril 2026)
+## ✅ Fix: sendPhoto no incluía phone y orientation (abril 2026)
+
+### Problema
+El viewer enviaba fotos al evento impresora tras el pago, pero el backend de Printbox requería `phone` y `orientation` obligatorios, causando error 422.
+
+### Causa
+En `api.js` la función `sendPhoto()` construía el body correctamente pero en el fetch se enviaba solo `{ event, image, times }` ignorando los campos opcionales.
+
+### Corrección
+- `src/shared/api.js`: Corregido el fetch para usar `JSON.stringify(body)` completo en lugar de hardcodear `{ event, image, times }`
+- `src/viewer/ViewerApp.jsx`: Ahora envía `phone: '000000000'` y `orientation: 'landscape'` como valores por defecto para el visor público
+
+### Archivos modificados
+- `src/shared/api.js` → línea 322: `body: JSON.stringify(body)`
+- `src/viewer/ViewerApp.jsx` → línea 569-575: envía phone y orientation
+
+---
+
+## ✅ Fix: precio se multiplicaba por 100 dos veces (abril 2026)
+
+### Problema
+El usuario ponía 0.10€ y el banco cobraba 10€. Ponía 0.01€ y cobraba 1€.
+
+### Causa
+El viewer ya enviaba el precio en centavos (ej: 10 para 0.10€), pero `proxy.php` multiplicaba por 100 otra vez: `round(floatval($data['amount']) * 100)`.
+
+### Corrección
+`proxy.php` línea 645: Cambiado de `round(floatval($data['amount']) * 100)` a `intval($data['amount'])` ya que el viewer ya envía centavos.
+
+---
+
+## ✅ Fix: evento_printer no se guardaba en servidor_api.txt (abril 2026)
+
+### Problema
+El código de evento de impresora se guardaba en Admin pero no persistía.
+
+### Causa
+`proxy.php` solo guardaba 5 campos en `servidor_api.txt` (sin `evento_printer`).
+
+### Corrección
+Agregado `evento_printer` al array de claves tanto en lectura como escritura de `servidor_api.txt`.
+
+---
+
+## ✅ Implementado: Pagos con Tarjeta y PayPal (abril 2026)
 
 ### Características actuales
 
