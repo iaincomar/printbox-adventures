@@ -570,6 +570,7 @@ export default function ViewerApp() {
             event: config.evento_printer,
             image: base64,
             times: copies,
+            name: `print_${copies}_${selectedPhoto.id || 'viewer'}`,
             phone: '000000000',  // Valor por defecto para viewer público
             orientation: 'landscape'  // Valor por defecto
           })

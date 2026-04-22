@@ -828,6 +828,7 @@ export default function MobileApp() {
         event: targetUuid,   // ← cambio
         image: photo.dataUrl,
         times: 1,
+        name: `print_1_${photo.id}`,
         phone: '000000000',
         orientation: 'portrait'
       })
@@ -911,6 +912,7 @@ export default function MobileApp() {
         event: targetUuid,
         image: resized,
         times: photo.copies,
+        name: `print_${photo.copies}_${photo.id || 'gallery'}`,
         phone: '000000000',
         orientation: 'portrait'
       })
@@ -922,6 +924,7 @@ export default function MobileApp() {
         event: targetUuid,
         image: photo.dataUrl,
         times: photo.copies,
+        name: `print_${photo.copies}_${photo.id}`,
         phone: '000000000',
         orientation: 'portrait'
       })
@@ -1202,7 +1205,7 @@ export default function MobileApp() {
                   setSending(true)
                   try {
                     for (const photo of capturedPhotos) {
-                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, phone: '000000000', orientation: 'portrait' })
+                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, name: `print_1_${photo.id}`, phone: '000000000', orientation: 'portrait' })
                     }
                     showToast(`${capturedPhotos.length} foto(s) subida(s)`)
                     setCapturedPhotos([])
