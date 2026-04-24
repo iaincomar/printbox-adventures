@@ -634,9 +634,6 @@ export default function MobileApp() {
   }
 
   // ============================================
-  // PASO 2: OTP - VERIFICACIÓN DE USUARIO
-
-  // ============================================
   // PASO 2: GALERÍA - CARGAR FOTOS
   // ============================================
 

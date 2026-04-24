@@ -95,7 +95,7 @@ Producción:  https://printbox.incomar.net/health  →  { "ok": true }
 ### Probar app móvil desde el móvil en desarrollo (mismo WiFi)
 1. Descubrir tu IP local: `ipconfig` (Windows) → busca `IPv4 Address: 192.168.X.X`
 2. Cambiar en `src/shared/api.js` → `const BACKEND_URL = 'http://192.168.X.X:4000'`
-3. Abrir desde móvil → `http://192.168.X.X:3000/#/mobile`
+3. Abrir desde móvil → `http://192.168.X.X:3000/mobile`
 
 > ⚠️ La cámara del móvil solo funciona en **HTTPS** (producción en https://printbox.incomar.net). En desarrollo local solo funciona la galería.
 
@@ -148,7 +148,7 @@ C:\Users\[usuario]\AppData\Local\PrintboxAdventures\
 ### Cómo funciona
 - **Push a `main/master`**: Se ejecuta automáticamente el build y se crea un release draft
 - **Publicar release**: Los archivos del instalador se suben como assets del release
-- **Tag automático**: Se crea un tag con el número de versión (ej: `v1.0.6`)
+- **Tag automático**: Se crea un tag con el número de versión (ej: `v1.0.7`)
 
 ### Archivos generados en cada release
 - `PrintboxAdventures Setup X.X.X.exe` - Instalador para Windows

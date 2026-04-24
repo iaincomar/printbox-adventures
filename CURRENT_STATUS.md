@@ -13,9 +13,9 @@ Las funciones `sendPhoto()` en MobileApp.jsx no pasaban `phone` y `orientation` 
 ### Corrección implementada
 - `src/viewer/ViewerApp.jsx`: Ya incluía `phone: '000000000'` y `orientation: 'landscape'` ✓
 - `src/mobile/MobileApp.jsx`: Actualizado para enviar `phone: '000000000'` y `orientation: 'portrait'` en:
-  - `uploadPhotoDirectly()` - línea 785
-  - `sendOrderPhotos()` - líneas 859 y 864 (fotos de galería y cámara)
-  - Botón "Subir fotos directamente" - línea 1153
+  - `uploadPhotoDirectly()` - línea 824
+  - `sendOrderPhotos()` - líneas 908 (fotos de galería) y 920 (fotos de cámara)
+  - Botón "Subir fotos directamente" - línea 1205
 
 ### Archivos modificados
 - `src/mobile/MobileApp.jsx` → 4 llamadas a `sendPhoto()` ahora incluyen campos obligatorios
