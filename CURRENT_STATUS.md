@@ -2,6 +2,51 @@
 
 ---
 
+## ✅ Fix: Nombres únicos en envío de fotos para evitar colisiones (abril 2026)
+
+### Problema
+Cuando se seleccionaban 2 o 3 copias de la misma foto, los archivos se nombraban igual (`gallery`) y se sobreescribían, o la impresora recibía múltiples archivos idénticos y crasheaba.
+
+### Causa
+MobileApp usaba `name: photo.id` (ej: "gallery") sin prefijo único, causando colisiones. ViewerApp usaba `name: \`print_${copies}_...\`` pero el backend Laravel también añade prefijo, resultando en `print_1_print_2_...`.
+
+### Corrección implementada
+- **MobileApp.jsx**: Genera nombre único con timestamp y random para cada foto:
+  ```javascript
+  const uniqueName = `g${Date.now()}${Math.random().toString(36).substr(2, 9)}`
+  // Resultado: g17773740315825jtix4m5j
+  ```
+- **ViewerApp.jsx**: Usa `name: uniqueName` sin prefijo (el backend añade `print_N_`)
+
+### Archivos modificados
+- `src/mobile/MobileApp.jsx` → `sendOrderPhotos()` (líneas 908, 922) y botón enviar foto cámara (línea 1205)
+- `src/viewer/ViewerApp.jsx` → `handlePayment()` línea 573
+
+---
+
+## ✅ Fix: Backend Express - Sistema de cola para evitar crashes (abril 2026)
+
+### Problema
+Cuando la PrinterApp enviaba múltiples jobs de impresión simultáneamente, el backend Express crasheaba.
+
+### Causa
+`sharp` y `pdf-to-printer` no manejan bien ejecuciones concurrentes.
+
+### Corrección implementada
+- `backend/routes/print.js`: Sistema de cola con `isProcessing` + `printQueue[]` que procesa un job a la vez.
+
+---
+
+## ✅ Fix: PrinterApp agrupaba fotos incorrectamente (abril 2026)
+
+### Problema
+PrinterApp recibía `uri_full = gallery_...` con `times = N` pero no sabía construir `print_N_...` correctamente.
+
+### Corrección implementada
+- `src/printer/PrinterApp.jsx`: Nuevo código que agrupa fotos por nombre base, toma el mayor `times`, y envía UNA sola petición con `print_${times}_${photoName}`.
+
+---
+
 ## ✅ Fix: sendPhoto no incluía phone y orientation (abril 2026) - IMPLEMENTADO
 
 ### Problema

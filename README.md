@@ -30,24 +30,27 @@ Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Pyth
 
 ## 1. Descripción general
 
-PrintboxAdventures se compone de **dos interfaces públicas en web** y **una app de escritorio**:
+PrintboxAdventures se compone de **dos interfaces web públicas** desplegadas en IONOS:
 
-### Interfaces web (públicas)
+### Interfaces web (desplegadas en IONOS)
 
 | Pantalla | Ruta | Uso |
 | --- | --- | --- |
 | Visor de Evento | `/viewer` | Proyección de fotos en pantalla pública del evento |
 | App Móvil | `/mobile` | Cliente escanea QR desde su móvil para ver/comprar fotos |
+| Admin | `/admin` | Panel de configuración de precios y textos |
 
-### App de escritorio (Electron)
+### Impresión
 
-| Aplicación | Acceso | Uso |
-| --- | --- | --- |
-| Panel de Control | Solo Electron | Operador del evento (sin acceso web) |
+La impresión física la maneja una **app Python separada** (`PrintboxApp`) que:
+- Escanea `galleries_two` cada X segundos
+- Detecta fotos pendientes (`times > 0`)
+- Construye URLs `print_N_nombre.jpg` donde N = número de copias
+- Envía a la impresora con i_view32.exe
 
-Se conecta a la API de Printbox en `https://gestion.printboxweb.com` (servidor Laravel).
+### App Electron (legacy - NO se usa actualmente)
 
-> ⚠️ **Nota:** El Panel de Control (`/printer`) es **solo accesible desde la app de Electron**, no desde navegador web.
+La app de escritorio Electron (`Panel de Control`) está en el repositorio pero **no está desplegada**. La impresión real funciona con la app Python en otro PC.
 
 ---
 
@@ -58,14 +61,14 @@ Se conecta a la API de Printbox en `https://gestion.printboxweb.com` (servidor L
 - Windows 10/11 x64
 - Node.js v18 o superior → <https://nodejs.org>
 - npm (incluido con Node.js)
-- Una impresora instalada
+- Una impresora instalada (para pruebas)
 - Conexión a internet
 
-### Para el equipo destino (instalador .exe)
+### Para despliegue (IONOS)
 
-- Windows 10/11 x64
-- **No necesita** Node.js ni nada de desarrollo
-- Sí necesita impresora y conexión a internet
+- Acceso FTP al hosting IONOS
+- Dominio configurado: `printbox.incomar.net`
+- Backend Laravel en `gestion.printboxweb.com` (externo)
 
 ---
 
@@ -84,7 +87,7 @@ npm run dev
 Lanza 3 procesos:
 - `[REACT]` — Vite dev server en `http://localhost:3000`
 - `[BACKEND]` — Express en `http://localhost:4000`
-- `[ELECTRON]` — Abre las ventanas de escritorio
+- `[ELECTRON]` — Abre las ventanas de escritorio (legacy)
 
 ### Verificar backend en desarrollo y producción
 ```

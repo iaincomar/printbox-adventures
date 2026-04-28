@@ -271,43 +271,104 @@ export default function PrinterApp() {
       setApiStatus('ok')
       reconnectAttemptsRef.current = 0
 
-      if (!photos?.length) return
+      if (!photos?.length) {
+        addLog(`... Sin fotos pendientes (${photos?.length || 0} fotos)`)
+        return
+      }
 
-      // Procesar cada foto pendiente
+      addLog(`→ ${photos.length} foto(s) con ${photos.reduce((s,p)=>s+(p.times||1),0)} copia(s) pendiente(s)`)
+
+      // Agrupar fotos por nombre base y quedarse solo con la de mayor prefijo
+      // Manejar tanto gallery_ como print_N_ formatos
+      const photoMap = new Map()
       for (const photo of photos) {
         const baseUrl = photo.uri_full
-        const baseName = baseUrl.split('/').pop()
+        const parts = baseUrl.split('/')
+        const baseName = parts.pop()
+        const eventPath = parts.join('/') + '/'
 
-        // Imprimir según el número de copias solicitadas
-        for (let t = 1; t <= (photo.times || 1); t++) {
-          const imageName = baseName.replace('gallery_', `print_${t}_`)
-          
-          // Evitar imprimir la misma imagen dos veces
-          if (printedImages.includes(imageName)) continue
+        // Extraer el prefijo y el nombre
+        // Formato 1: gallery_name.jpeg
+        // Formato 2: print_N_name.jpeg
+        let photoName = baseName
+        let copies = photo.times || 1
 
-          addLog(`↓ Descargando ${imageName}...`)
-          
-          try {
-            const result = await fetch(`${BACKEND}/print/job`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                imageUrl: baseUrl,
-                imageName,
-                printer: config.impresora,
-                delay: config.delay
-              }),
-            }).then(r => r.json())
-
-            if (result.error) throw new Error(result.error)
-
-            setPrintedImages(prev => [...prev, imageName])
-            setLastPhoto(baseUrl)
-            setPrintCount(result.count)
-            addLog(`✓ Impreso: ${imageName} (total: ${result.count})`, 'success')
-          } catch (err) {
-            addLog(`✗ Error impresión: ${err.message}`, 'error')
+        const printMatch = baseName.match(/^print_(\d+)_(.+)$/)
+        if (printMatch) {
+          // Es un archivo print_N_, quedarse con el mayor N
+          const copyNum = parseInt(printMatch[1])
+          photoName = printMatch[2]
+          const key = `${eventPath}|${photoName}`
+          if (!photoMap.has(key) || copyNum > photoMap.get(key).copyNum) {
+            photoMap.set(key, {
+              eventPath,
+              photoName,
+              copyNum,
+              copies: copyNum
+            })
           }
+          continue
+        }
+
+        // Es un archivo gallery_, usar times como número de copias
+        // Pero NO podemos cambiar a print_N_ porque el archivo no existe
+        // Solo guardamos el mayor times
+        const galleryMatch = baseName.match(/^gallery_(.+)$/)
+        if (galleryMatch) {
+          photoName = galleryMatch[1]
+          const key = `${eventPath}|${photoName}`
+          // Solo guardar si no existe o si este tiene más copias
+          if (!photoMap.has(key) || copies > photoMap.get(key).copies) {
+            photoMap.set(key, {
+              eventPath,
+              photoName,
+              copies
+            })
+          }
+        }
+      }
+
+      // Procesar cada foto agrupada
+      for (const [key, photo] of photoMap) {
+        // Construir URL del archivo print con el número de copias
+        // print_2_ si times=2, print_1_ si times=1, etc.
+        const imageName = `print_${photo.copies}_${photo.photoName}`
+        const printUrl = `${photo.eventPath}${imageName}`
+
+        if (printedImages.includes(imageName)) {
+          addLog(`⏭ Saltar: ${imageName} (ya impreso)`)
+          continue
+        }
+
+        addLog(`↓ Enviando ${imageName} (${photo.copies} copia(s))...`)
+
+        try {
+          const response = await fetch(`${BACKEND}/print/job`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              imageUrl: printUrl,
+              imageName,
+              printer: config.impresora,
+              delay: config.delay
+            }),
+          })
+
+          if (!response.ok) {
+            const text = await response.text()
+            throw new Error(`HTTP ${response.status}: ${text}`)
+          }
+
+          const result = await response.json()
+
+          if (result.error) throw new Error(result.error)
+
+          setPrintedImages(prev => [...prev, imageName])
+          setLastPhoto(printUrl)
+          setPrintCount(result.count || 0)
+          addLog(`✓ Impreso: ${imageName} (total: ${result.count || 0})`, 'success')
+        } catch (err) {
+          addLog(`✗ Error: ${err.message}`, 'error')
         }
       }
       addLog('... Esperando más imágenes.')

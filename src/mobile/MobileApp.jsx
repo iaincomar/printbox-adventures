@@ -825,7 +825,7 @@ export default function MobileApp() {
         event: targetUuid,   // ← cambio
         image: photo.dataUrl,
         times: 1,
-        name: `print_1_${photo.id}`,
+        name: photo.id,
         phone: '000000000',
         orientation: 'portrait'
       })
@@ -905,11 +905,13 @@ export default function MobileApp() {
         reader.readAsDataURL(blob)
       })
       const resized = await resizeImageBase64(base64, 1400)
+      // Generar nombre único para evitar colisiones cuando se piden varias copias
+      const uniqueName = `g${Date.now()}${Math.random().toString(36).substr(2, 9)}`
       await sendPhoto({
         event: targetUuid,
         image: resized,
         times: photo.copies,
-        name: `print_${photo.copies}_${photo.id || 'gallery'}`,
+        name: uniqueName,
         phone: '000000000',
         orientation: 'portrait'
       })
@@ -917,11 +919,12 @@ export default function MobileApp() {
 
     // Enviar fotos de cámara
     for (const photo of capturedPhotos) {
+      const uniqueName = `c${Date.now()}${Math.random().toString(36).substr(2, 9)}`
       await sendPhoto({
         event: targetUuid,
         image: photo.dataUrl,
-        times: photo.copies,
-        name: `print_${photo.copies}_${photo.id}`,
+        times: photo.copies || 1,
+        name: uniqueName,
         phone: '000000000',
         orientation: 'portrait'
       })
@@ -1202,7 +1205,8 @@ export default function MobileApp() {
                   setSending(true)
                   try {
                     for (const photo of capturedPhotos) {
-                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: 1, name: `print_1_${photo.id}`, phone: '000000000', orientation: 'portrait' })
+                      const uniqueName = `c${Date.now()}${Math.random().toString(36).substr(2, 9)}`
+                      await sendPhoto({ event: uuid, image: photo.dataUrl, times: photo.copies || 1, name: uniqueName, phone: '000000000', orientation: 'portrait' })
                     }
                     showToast(`${capturedPhotos.length} foto(s) subida(s)`)
                     setCapturedPhotos([])

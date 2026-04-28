@@ -6,6 +6,10 @@ const fetch = require('node-fetch')
 const PDFDocument = require('pdfkit')
 const os = require('os')
 
+// Cola para evitar procesar múltiples trabajos simultáneamente
+let isProcessing = false
+const printQueue = []
+
 function getDataDir(req) {
   return req.app.locals.dataDir ||
     path.join(os.homedir(), 'AppData', 'Local', 'PrintboxAdventures')
@@ -37,6 +41,18 @@ router.get('/count', (req, res) => {
 // POST /print/job
 router.post('/job', async (req, res) => {
   const { imageUrl, imageName, printer, delay = 5 } = req.body
+
+  // Añadir a la cola y procesar
+  printQueue.push({ req, res, imageUrl, imageName, printer, delay })
+  processQueue(req.app)
+})
+
+async function processQueue(app) {
+  if (isProcessing || printQueue.length === 0) return
+
+  isProcessing = true
+  const { req, res, imageUrl, imageName, printer, delay } = printQueue.shift()
+
   const DATA_DIR = getDataDir(req)
   const descargasDir = path.join(DATA_DIR, 'descargas')
   const pdfDir = path.join(DATA_DIR, 'pdf')
@@ -74,8 +90,12 @@ router.post('/job', async (req, res) => {
     res.json({ ok: true, count: newCount })
   } catch (err) {
     res.status(500).json({ error: err.message })
+  } finally {
+    isProcessing = false
+    // Procesar siguiente en cola
+    processQueue(app)
   }
-})
+}
 
 async function convertImageToPdf(imagePath, pdfPath) {
   const sharp = require('sharp')
