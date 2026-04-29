@@ -894,7 +894,7 @@ export default function MobileApp() {
     const targetUuid = printerUuid || uuid   // Usar evento impresora si existe, si no el principal
     if (!targetUuid) throw new Error('No hay evento destino')
 
-    // Enviar fotos de la galería
+    // Enviar fotos de la galería - una llamada por cada copia para evitar colisiones
     for (const photo of selected) {
       const proxyUrl = getImageUrl(photo.uri_full || photo.uri)
       const resp = await fetch(proxyUrl)
@@ -905,29 +905,36 @@ export default function MobileApp() {
         reader.readAsDataURL(blob)
       })
       const resized = await resizeImageBase64(base64, 1400)
-      // Generar nombre único para evitar colisiones cuando se piden varias copias
-      const uniqueName = `g${Date.now()}${Math.random().toString(36).substr(2, 9)}`
-      await sendPhoto({
-        event: targetUuid,
-        image: resized,
-        times: photo.copies,
-        name: uniqueName,
-        phone: '000000000',
-        orientation: 'portrait'
-      })
+
+      // Enviar tantas llamadas como copias solicitadas, cada una con times:1
+      // Así el backend crea print_1_name1, print_1_name2, etc. sin colisiones
+      for (let i = 0; i < photo.copies; i++) {
+        const uniqueName = `g${Date.now()}${Math.random().toString(36).substr(2, 9)}_${i + 1}`
+        await sendPhoto({
+          event: targetUuid,
+          image: resized,
+          times: 1,
+          name: uniqueName,
+          phone: '000000000',
+          orientation: 'portrait'
+        })
+      }
     }
 
     // Enviar fotos de cámara
     for (const photo of capturedPhotos) {
-      const uniqueName = `c${Date.now()}${Math.random().toString(36).substr(2, 9)}`
-      await sendPhoto({
-        event: targetUuid,
-        image: photo.dataUrl,
-        times: photo.copies || 1,
-        name: uniqueName,
-        phone: '000000000',
-        orientation: 'portrait'
-      })
+      const copies = photo.copies || 1
+      for (let i = 0; i < copies; i++) {
+        const uniqueName = `c${Date.now()}${Math.random().toString(36).substr(2, 9)}_${i + 1}`
+        await sendPhoto({
+          event: targetUuid,
+          image: photo.dataUrl,
+          times: 1,
+          name: uniqueName,
+          phone: '000000000',
+          orientation: 'portrait'
+        })
+      }
     }
     return true
   }

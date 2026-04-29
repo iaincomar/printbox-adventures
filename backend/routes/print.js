@@ -61,8 +61,13 @@ async function processQueue(app) {
   fs.ensureDirSync(descargasDir)
   fs.ensureDirSync(pdfDir)
 
-  const imagePath = path.join(descargasDir, imageName)
-  const pdfPath = path.join(pdfDir, imageName.replace(/\.[^.]+$/, '.pdf'))
+  // Usar nombre único para evitar colisiones cuando hay múltiples jobs simultáneos
+  const uniqueSuffix = Date.now().toString(36) + Math.random().toString(36).substr(2, 5)
+  const ext = path.extname(imageName)
+  const baseName = path.basename(imageName, ext)
+  const uniqueImageName = `${baseName}_${uniqueSuffix}${ext}`
+  const imagePath = path.join(descargasDir, uniqueImageName)
+  const pdfPath = path.join(pdfDir, uniqueImageName.replace(ext, '.pdf'))
 
   try {
     // 1. Descargar imagen

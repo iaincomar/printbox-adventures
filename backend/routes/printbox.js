@@ -167,9 +167,17 @@ router.post('/photo-send', async (req, res) => {
     }
     if (phone) payload.phone = phone
     if (orientation) payload.orientation = orientation
-    const r = await fetch(`${BASE}/api/v1/events/photo/send`, {
+
+    // Obtener token CSRF y hacer la petición con cookies
+    const csrfToken = await getCsrfToken()
+    const r = await fetchWithCookies(`${BASE}/api/v1/events/photo/send`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        'X-XSRF-TOKEN': csrfToken,
+      },
       body: JSON.stringify(payload),
     })
     const data = await r.json()
