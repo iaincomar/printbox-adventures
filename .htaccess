@@ -33,6 +33,12 @@ RewriteRule ^printbox/.*$ /proxy.php [PT,L,QSA]
 RewriteRule ^proxy-image/.*$ /proxy.php [PT,L,QSA]
 RewriteRule ^paypal/.*$ /proxy.php [PT,L,QSA]
 
+# Coupon endpoints (generación, validación, canje y listado)
+RewriteRule ^coupon/create$ /proxy.php [PT,L,QSA]
+RewriteRule ^coupon/validate$ /proxy.php [PT,L,QSA]
+RewriteRule ^coupon/redeem$ /proxy.php [PT,L,QSA]
+RewriteRule ^coupon/list$ /proxy.php [PT,L,QSA]
+
 # Apple Pay domain verification - headers
 <Files "apple-developer-merchantid-domain-association">
     Header always set Content-Type "text/plain"

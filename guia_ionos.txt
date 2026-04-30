@@ -4,7 +4,7 @@ GUÍA RÁPIDA: Publicar proyecto en IONOS (Apache compartido)
 
 1. PREPARAR EL PROYECTO
 ------------------------
-- Haz tus cambios en local
+- Haz tus cambios en local(o haciendo pull si es lovable :P)
 - npm install   (o npm update si ya tienes node_modules)
 - npm run build
 
