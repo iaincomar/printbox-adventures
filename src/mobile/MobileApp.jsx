@@ -98,6 +98,12 @@ export default function MobileApp() {
   const [paypalLoading, setPaypalLoading] = useState(false) // Pago PayPal en progreso
   const paypalButtonsRef = useRef(null)                  // Referencia a PayPal Buttons
 
+  // --- Estados de cupón ---
+  const [couponCode, setCouponCode] = useState('')        // Código de cupón introducido
+  const [couponError, setCouponError] = useState('')      // Error de validación del cupón
+  const [couponApplied, setCouponApplied] = useState(null) // { amount, amount_eur } si cupón validado
+  const [couponLoading, setCouponLoading] = useState(false) // Validando cupón
+
   const applyTextos = (incoming) => {
     if (!incoming) return
     setTextos(prev => ({
@@ -450,6 +456,62 @@ export default function MobileApp() {
     initPayPal()
     return () => { cancelled = true }
   }, [step])
+
+  // ── Cupones: valida y canjea contra el backend ─────────────────────────
+  const validateCoupon = async (code) => {
+    const evento = eventCode.replace(/^ev[-_]?/i, '')
+    const res = await fetch('/coupon/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code.trim().toUpperCase(), evento }),
+    })
+    const json = await res.json()
+    if (!res.ok || !json.valid) throw new Error(json.error || 'Cupón inválido')
+    return json
+  }
+
+  const redeemCoupon = async (code, orderId) => {
+    const evento = eventCode.replace(/^ev[-_]?/i, '')
+    const res = await fetch('/coupon/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code.trim().toUpperCase(), evento, order_id: orderId }),
+    })
+    const json = await res.json()
+    if (!res.ok || !json.ok) throw new Error(json.error || 'No se pudo canjear el cupón')
+    return json
+  }
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) { setCouponError('Introduce un código'); return }
+    setCouponLoading(true)
+    setCouponError('')
+    try {
+      const result = await validateCoupon(couponCode)
+      setCouponApplied(result)
+      showToast(`✔ Cupón aplicado: ${result.amount_eur}`)
+    } catch (e) {
+      setCouponError(e.message)
+      setCouponApplied(null)
+    } finally {
+      setCouponLoading(false)
+    }
+  }
+
+  const handleCouponPayment = async () => {
+    if (!couponApplied) { setCouponError('Valida el cupón primero'); return }
+    setSending(true)
+    try {
+      const orderId = `mobile_${Date.now()}`
+      await redeemCoupon(couponCode, orderId)
+      await sendOrderPhotos()
+      setStep(STEP_SUCCESS)
+    } catch (e) {
+      showToast(`Error: ${e.message}`)
+    } finally {
+      setSending(false)
+    }
+  }
 
   const handleSquarePayment = async () => {
     console.log('handleSquarePayment invocado')
@@ -1334,6 +1396,61 @@ export default function MobileApp() {
           {/* Métodos de Pago */}
           <div className="payment-methods-section">
             <h6 className="payment-title"><i className="bi bi-credit-card me-2"></i>Selecciona tu metodo de pago</h6>
+
+            {/* Cupón de descuento (pago en efectivo) */}
+            <div className="payment-method-card" style={{ borderColor: couponApplied ? '#198754' : undefined }}>
+              <div className="payment-method-header">
+                <div className="payment-method-icon" style={{ background: 'linear-gradient(135deg,#198754,#0d6832)', color: '#fff' }}>
+                  <i className="bi bi-ticket-perforated"></i>
+                </div>
+                <div className="payment-method-info">
+                  <div className="payment-method-name">Cupón de pago</div>
+                  <div className="payment-method-desc">Introduce el código que te ha dado el operador</div>
+                </div>
+              </div>
+              <div className="payment-method-content">
+                {couponApplied ? (
+                  <div className="d-flex align-items-center justify-content-between gap-2">
+                    <div className="text-success fw-bold">
+                      <i className="bi bi-check-circle-fill me-1" />
+                      Cupón aplicado: {couponApplied.amount_eur}
+                    </div>
+                    <button className="btn btn-sm btn-outline-secondary" onClick={() => { setCouponApplied(null); setCouponCode(''); setCouponError('') }}>
+                      Cambiar
+                    </button>
+                  </div>
+                ) : (
+                  <div className="d-flex gap-2">
+                    <input
+                      type="text"
+                      className={`form-control bg-black border-secondary text-light text-uppercase ${couponError ? 'is-invalid' : ''}`}
+                      placeholder="Ej: A3F7B2C1-E4A1"
+                      value={couponCode}
+                      onChange={e => { setCouponCode(e.target.value); setCouponError('') }}
+                      style={{ fontFamily: 'monospace', letterSpacing: '1px' }}
+                    />
+                    <button
+                      className="btn btn-outline-success fw-bold"
+                      onClick={handleApplyCoupon}
+                      disabled={couponLoading}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      {couponLoading ? <span className="spinner-border spinner-border-sm" /> : 'Aplicar'}
+                    </button>
+                  </div>
+                )}
+                {couponError && <div className="text-danger mt-1" style={{ fontSize: '13px' }}>{couponError}</div>}
+                {couponApplied && (
+                  <button
+                    className="btn btn-success w-100 fw-bold mt-2 payment-btn"
+                    onClick={handleCouponPayment}
+                    disabled={sending}
+                  >
+                    {sending ? <><span className="spinner-border spinner-border-sm me-2" />Procesando...</> : <><i className="bi bi-check-circle me-2" />Confirmar pedido con cupón</>}
+                  </button>
+                )}
+              </div>
+            </div>
 
             {/* PayPal */}
             <div className="payment-method-card paypal-card">

@@ -90,6 +90,16 @@ export default function ViewerApp() {
   const [privacyContent, setPrivacyContent] = useState('')
   const [showAdminConfig, setShowAdminConfig] = useState(false)
 
+  // --- Estados panel de cupones (admin) ---
+  const [showCouponPanel, setShowCouponPanel] = useState(false)
+  const [couponGenAmount, setCouponGenAmount] = useState('')     // importe en euros
+  const [couponGenHours, setCouponGenHours] = useState('72')    // caducidad en horas
+  const [couponGenResult, setCouponGenResult] = useState(null)  // { code, amount_eur, expires_at }
+  const [couponGenError, setCouponGenError] = useState('')
+  const [couponGenLoading, setCouponGenLoading] = useState(false)
+  const [couponList, setCouponList] = useState([])
+  const [couponListLoading, setCouponListLoading] = useState(false)
+
   // --- Estados de pago ---
   const [showPayment, setShowPayment] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState('')
@@ -488,10 +498,12 @@ export default function ViewerApp() {
   async function handlePayment() {
     if (!selectedPhoto || printing || !paymentMethod) return
 
-    // Validate coupon if selected
+    // Validate coupon if selected (llamada al backend)
     if (paymentMethod === 'coupon') {
-      if (!validateCoupon(couponCode)) {
-        setCouponError('Cupón inválido o ya utilizado')
+      try {
+        await validateCoupon(couponCode)
+      } catch (e) {
+        setCouponError(e.message || 'Cupón inválido o ya utilizado')
         return
       }
     }
@@ -547,8 +559,9 @@ export default function ViewerApp() {
           setSquareLoading(false)
         }
       } else if (paymentMethod === 'coupon') {
-        // Mark coupon as used
-        markCouponUsed(couponCode)
+        // Canjear cupón en el backend (consume el uso único)
+        const orderId = `viewer_${Date.now()}`
+        await redeemCoupon(couponCode, orderId)
       }
 
       // Marcar como pagado exitosamente (aunque falle envío de fotos)
@@ -586,15 +599,71 @@ export default function ViewerApp() {
     }
   }
 
-  // Simple coupon validation (for demo)
-  function validateCoupon(code) {
-    // Simple check: code should be 8 characters, alphanumeric
-    return code.length === 8 && /^[A-Z0-9]+$/.test(code)
+  // ── Cupones: panel admin ───────────────────────────────────────────────────
+  const handleGenerateCoupon = async () => {
+    const euros = parseFloat(couponGenAmount)
+    if (!euros || euros <= 0) { setCouponGenError('Introduce un importe válido'); return }
+    const evento = (config?.evento || '').replace('ev-', '')
+    if (!evento) { setCouponGenError('No hay evento activo'); return }
+    setCouponGenLoading(true)
+    setCouponGenError('')
+    setCouponGenResult(null)
+    try {
+      const res = await fetch('/coupon/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          evento,
+          amount: Math.round(euros * 100), // en céntimos
+          expires_hours: parseInt(couponGenHours) || 72,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Error al generar')
+      setCouponGenResult(json)
+      loadCouponList()
+    } catch (e) {
+      setCouponGenError(e.message)
+    } finally {
+      setCouponGenLoading(false)
+    }
   }
 
-  function markCouponUsed(code) {
-    // TODO: Store used coupons
-    console.log('Cupón usado:', code)
+  const loadCouponList = async () => {
+    const evento = (config?.evento || '').replace('ev-', '')
+    if (!evento) return
+    setCouponListLoading(true)
+    try {
+      const res = await fetch(`/coupon/list?evento=${encodeURIComponent(evento)}`)
+      const json = await res.json()
+      if (json.ok) setCouponList(json.coupons || [])
+    } catch (e) { /* silenciar */ }
+    finally { setCouponListLoading(false) }
+  }
+
+  // ── Cupones: valida y canjea contra el backend ───────────────────────────────────────────────────
+  async function validateCoupon(code) {
+    const evento = (config?.evento || '').replace('ev-', '')
+    const res = await fetch('/coupon/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code.trim().toUpperCase(), evento }),
+    })
+    const json = await res.json()
+    if (!res.ok || !json.valid) throw new Error(json.error || 'Cupón inválido')
+    return json // { valid, amount, amount_eur, expires_at }
+  }
+
+  async function redeemCoupon(code, orderId) {
+    const evento = (config?.evento || '').replace('ev-', '')
+    const res = await fetch('/coupon/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code.trim().toUpperCase(), evento, order_id: orderId }),
+    })
+    const json = await res.json()
+    if (!res.ok || !json.ok) throw new Error(json.error || 'No se pudo canjear el cupón')
+    return json
   }
 
   // ============================================
@@ -758,8 +827,112 @@ export default function ViewerApp() {
                 </div>
               </div>
               <div className="modal-footer border-secondary">
+                <button
+                  type="button"
+                  className="btn btn-outline-success me-auto"
+                  onClick={() => { setShowAdminConfig(false); setShowCouponPanel(true); loadCouponList() }}
+                >
+                  <i className="bi bi-ticket-perforated me-1" />Cupones
+                </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAdminConfig(false)}>Cancelar</button>
                 <button type="button" className="btn btn-warning text-dark" onClick={handleSaveAdminConfig}>Guardar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL PANEL CUPONES */}
+      {showCouponPanel && (
+        <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.85)' }} tabIndex="-1" onClick={() => setShowCouponPanel(false)}>
+          <div className="modal-dialog modal-dialog-centered modal-lg" onClick={e => e.stopPropagation()}>
+            <div className="modal-content bg-dark border border-secondary">
+              <div className="modal-header border-secondary">
+                <h5 className="modal-title text-warning"><i className="bi bi-ticket-perforated me-2" />Cupones de Pago en Efectivo</h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => setShowCouponPanel(false)} />
+              </div>
+              <div className="modal-body p-4">
+                {/* Generador de cupón */}
+                <h6 className="text-light mb-3">Generar nuevo cupón</h6>
+                <div className="row g-2 mb-3">
+                  <div className="col-md-5">
+                    <label className="form-label text-secondary" style={{ fontSize: '12px' }}>Importe (€)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      className="form-control bg-black border-secondary text-light"
+                      placeholder="Ej: 5.00"
+                      value={couponGenAmount}
+                      onChange={e => { setCouponGenAmount(e.target.value); setCouponGenError('') }}
+                    />
+                  </div>
+                  <div className="col-md-4">
+                    <label className="form-label text-secondary" style={{ fontSize: '12px' }}>Caduca en (horas)</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="form-control bg-black border-secondary text-light"
+                      value={couponGenHours}
+                      onChange={e => setCouponGenHours(e.target.value)}
+                    />
+                  </div>
+                  <div className="col-md-3 d-flex align-items-end">
+                    <button
+                      className="btn btn-warning text-dark fw-bold w-100"
+                      onClick={handleGenerateCoupon}
+                      disabled={couponGenLoading}
+                    >
+                      {couponGenLoading ? <span className="spinner-border spinner-border-sm" /> : <><i className="bi bi-plus-circle me-1" />Generar</>}
+                    </button>
+                  </div>
+                </div>
+                {couponGenError && <div className="alert alert-danger py-2">{couponGenError}</div>}
+                {couponGenResult && (
+                  <div className="alert alert-success py-2 d-flex align-items-center gap-3">
+                    <div>
+                      <div style={{ fontSize: '12px' }}>Código generado ({couponGenResult.amount_eur})</div>
+                      <div style={{ fontFamily: 'monospace', fontSize: '22px', fontWeight: 'bold', letterSpacing: '4px' }}>
+                        {couponGenResult.code}
+                      </div>
+                      <div style={{ fontSize: '11px' }}>Caduca: {new Date(couponGenResult.expires_at).toLocaleString('es-ES')}</div>
+                    </div>
+                    <button
+                      className="btn btn-sm btn-outline-success ms-auto"
+                      onClick={() => navigator.clipboard?.writeText(couponGenResult.code)}
+                    >
+                      <i className="bi bi-clipboard" /> Copiar
+                    </button>
+                  </div>
+                )}
+
+                {/* Lista de cupones del evento */}
+                <div className="d-flex justify-content-between align-items-center mt-4 mb-2">
+                  <h6 className="text-light mb-0">Cupones del evento</h6>
+                  <button className="btn btn-sm btn-outline-secondary" onClick={loadCouponList} disabled={couponListLoading}>
+                    {couponListLoading ? <span className="spinner-border spinner-border-sm" /> : <i className="bi bi-arrow-clockwise" />}
+                  </button>
+                </div>
+                <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                  {couponList.length === 0 && !couponListLoading && (
+                    <div className="text-secondary text-center py-3" style={{ fontSize: '13px' }}>No hay cupones. Genera el primero arriba.</div>
+                  )}
+                  {couponList.map(c => (
+                    <div key={c.code} className="d-flex align-items-center gap-2 py-2 border-bottom border-secondary">
+                      <span style={{ fontFamily: 'monospace', fontSize: '14px', letterSpacing: '2px', color: c.status === 'active' && !c.expired ? '#f7c604' : '#6c757d' }}>
+                        {c.code}
+                      </span>
+                      <span className={`badge ${c.status === 'used' ? 'bg-secondary' : c.expired ? 'bg-danger' : 'bg-success'}`} style={{ fontSize: '10px' }}>
+                        {c.status === 'used' ? 'Usado' : c.expired ? 'Caducado' : 'Activo'}
+                      </span>
+                      <span className="ms-auto text-light fw-bold">{c.amount_eur}</span>
+                      {c.used_at && <span className="text-secondary" style={{ fontSize: '11px' }}>{new Date(c.used_at).toLocaleString('es-ES')}</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer border-secondary">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCouponPanel(false)}>Cerrar</button>
               </div>
             </div>
           </div>

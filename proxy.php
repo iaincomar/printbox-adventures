@@ -830,5 +830,328 @@ if ($_GET['route'] === 'process-payment') {
     exit();
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// ── SISTEMA DE CUPONES ────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+
+// Clave secreta para firmar los códigos. Cámbiala y guárdala en secreto.
+define('COUPON_SECRET', 'pba_s3cr3t_k3y_2026');
+
+/**
+ * Normaliza el código de evento (quita prefijo ev- / ev_)
+ */
+function normalizeCouponEvent($code) {
+    return preg_replace('/^ev[-_]?/i', '', trim($code));
+}
+
+/**
+ * Devuelve la ruta del archivo JSON de cupones para un evento.
+ * Formato: /config/cupones-{evento}.json
+ */
+function getCouponFile($evento) {
+    $configDir = getConfigDir();
+    $evento = preg_replace('/[^0-9a-zA-Z_-]/', '', $evento);
+    return $configDir . '/cupones-' . $evento . '.json';
+}
+
+/**
+ * Devuelve la ruta del archivo de log de cupones para un evento.
+ */
+function getCouponLogFile($evento) {
+    $configDir = getConfigDir();
+    $evento = preg_replace('/[^0-9a-zA-Z_-]/', '', $evento);
+    return $configDir . '/cupones-log-' . $evento . '.txt';
+}
+
+/**
+ * Lee el JSON de cupones. Devuelve array vacío si no existe.
+ * Lee siempre desde $file (que puede ser el .lock durante el lock).
+ */
+function readCoupons($file) {
+    if (!file_exists($file)) return [];
+    $content = file_get_contents($file);
+    $decoded = json_decode($content, true);
+    return is_array($decoded) ? $decoded : [];
+}
+
+/**
+ * Escribe el JSON de cupones en el archivo indicado.
+ */
+function writeCoupons($file, $coupons) {
+    file_put_contents($file, json_encode($coupons, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+}
+
+/**
+ * Genera un código de cupón con firma HMAC para evitar falsificaciones.
+ * Formato: XXXXXXXX-YYYY  (8 chars aleatorios + 4 chars HMAC)
+ */
+function generateCouponCode() {
+    $random = strtoupper(bin2hex(random_bytes(4))); // 8 chars hex
+    $hmac   = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, 4));
+    return $random . '-' . $hmac;
+}
+
+/**
+ * Verifica que el código de cupón tiene una firma HMAC válida.
+ * Protege contra códigos inventados manualmente.
+ */
+function verifyCouponCode($code) {
+    $parts = explode('-', $code);
+    if (count($parts) !== 2) return false;
+    [$random, $hmac] = $parts;
+    if (strlen($random) !== 8 || strlen($hmac) !== 4) return false;
+    $expected = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, 4));
+    return hash_equals($expected, $hmac);
+}
+
+/**
+ * Ejecuta una función con lock atómico sobre el archivo de cupones.
+ * rename() en Linux/IONOS es atómico: solo un proceso gana.
+ * Si el .lock tiene más de 30s (proceso muerto), se limpia automáticamente.
+ */
+function withCouponLock($couponFile, callable $fn) {
+    $lockFile = $couponFile . '.lock';
+    $timeout  = 4000; // ms máximo de espera
+    $start    = microtime(true) * 1000;
+
+    // Limpiar lock huérfano (proceso muerto hace más de 30s)
+    if (file_exists($lockFile) && (time() - filemtime($lockFile)) > 30) {
+        @rename($lockFile, $couponFile);
+    }
+
+    // Si el archivo aún no existe, crearlo vacío para poder renombrarlo
+    if (!file_exists($couponFile)) {
+        file_put_contents($couponFile, '{}');
+    }
+
+    // Intentar obtener el lock renombrando el archivo original a .lock
+    while (!@rename($couponFile, $lockFile)) {
+        if ((microtime(true) * 1000 - $start) > $timeout) {
+            http_response_code(503);
+            echo json_encode(['error' => 'Sistema ocupado, reintenta']);
+            exit();
+        }
+        usleep(60000); // esperar 60ms antes de reintentar
+    }
+
+    try {
+        $result = $fn($lockFile);
+    } finally {
+        // SIEMPRE desbloquear, aunque falle
+        @rename($lockFile, $couponFile);
+    }
+    return $result;
+}
+
+/**
+ * Escribe una línea en el log de uso de cupones.
+ */
+function logCouponUsage($evento, $code, $amount, $action) {
+    $logFile = getCouponLogFile($evento);
+    $ip      = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+    $line    = date('Y-m-d H:i:s') . " [$action] code=$code amount={$amount} ip=$ip\n";
+    @file_put_contents($logFile, $line, FILE_APPEND | LOCK_EX);
+}
+
+// ── POST /coupon/create (Solo admin) ──────────────────────────────────────
+if ($uri === '/coupon/create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $evento = normalizeCouponEvent($data['evento'] ?? '');
+    $amount = intval($data['amount'] ?? 0); // en céntimos (ej: 500 = 5.00€)
+    $expiresIn = intval($data['expires_hours'] ?? 72); // horas hasta caducar, default 72h
+
+    if (!$evento) {
+        http_response_code(400);
+        echo json_encode(['error' => 'evento requerido']);
+        exit();
+    }
+    if ($amount <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'amount debe ser mayor que 0 (en céntimos)']);
+        exit();
+    }
+
+    $code = generateCouponCode();
+    $now  = time();
+
+    $couponFile = getCouponFile($evento);
+    withCouponLock($couponFile, function($lockFile) use ($code, $amount, $now, $expiresIn) {
+        $coupons = readCoupons($lockFile);
+        $coupons[$code] = [
+            'amount'     => $amount,
+            'status'     => 'active',
+            'created_at' => date('c', $now),
+            'expires_at' => date('c', $now + ($expiresIn * 3600)),
+            'used_at'    => null,
+            'used_by_ip' => null,
+            'used_order' => null,
+        ];
+        writeCoupons($lockFile, $coupons);
+    });
+
+    logCouponUsage($evento, $code, $amount, 'CREATE');
+
+    echo json_encode([
+        'ok'     => true,
+        'code'   => $code,
+        'amount' => $amount,
+        'amount_eur' => number_format($amount / 100, 2, '.', '') . '€',
+        'expires_at' => date('c', $now + ($expiresIn * 3600)),
+    ]);
+    exit();
+}
+
+// ── POST /coupon/validate (Solo comprueba, no consume) ────────────────────
+if ($uri === '/coupon/validate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $evento = normalizeCouponEvent($data['evento'] ?? '');
+    $code   = strtoupper(trim($data['code'] ?? ''));
+
+    if (!$evento || !$code) {
+        http_response_code(400);
+        echo json_encode(['error' => 'evento y code requeridos']);
+        exit();
+    }
+
+    // Verificar firma HMAC primero (evita leer el archivo para códigos inventados)
+    if (!verifyCouponCode($code)) {
+        http_response_code(422);
+        echo json_encode(['valid' => false, 'error' => 'Código de cupón inválido']);
+        exit();
+    }
+
+    $couponFile = getCouponFile($evento);
+    $coupons    = readCoupons($couponFile);
+
+    if (!isset($coupons[$code])) {
+        http_response_code(422);
+        echo json_encode(['valid' => false, 'error' => 'Cupón no encontrado']);
+        exit();
+    }
+
+    $coupon = $coupons[$code];
+
+    if ($coupon['status'] !== 'active') {
+        http_response_code(422);
+        echo json_encode(['valid' => false, 'error' => 'Cupón ya utilizado']);
+        exit();
+    }
+
+    if (strtotime($coupon['expires_at']) < time()) {
+        http_response_code(422);
+        echo json_encode(['valid' => false, 'error' => 'Cupón caducado']);
+        exit();
+    }
+
+    echo json_encode([
+        'valid'      => true,
+        'amount'     => $coupon['amount'],
+        'amount_eur' => number_format($coupon['amount'] / 100, 2, '.', '') . '€',
+        'expires_at' => $coupon['expires_at'],
+    ]);
+    exit();
+}
+
+// ── POST /coupon/redeem (Consume el cupón — llamar solo tras pago exitoso) ─
+if ($uri === '/coupon/redeem' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $evento   = normalizeCouponEvent($data['evento'] ?? '');
+    $code     = strtoupper(trim($data['code'] ?? ''));
+    $orderId  = $data['order_id'] ?? '';
+
+    if (!$evento || !$code) {
+        http_response_code(400);
+        echo json_encode(['error' => 'evento y code requeridos']);
+        exit();
+    }
+
+    // Verificar firma HMAC
+    if (!verifyCouponCode($code)) {
+        http_response_code(422);
+        echo json_encode(['ok' => false, 'error' => 'Código de cupón inválido']);
+        exit();
+    }
+
+    $couponFile = getCouponFile($evento);
+    $result = withCouponLock($couponFile, function($lockFile) use ($code, $orderId) {
+        $coupons = readCoupons($lockFile);
+
+        if (!isset($coupons[$code])) {
+            return ['ok' => false, 'error' => 'Cupón no encontrado', 'http' => 422];
+        }
+
+        $coupon = $coupons[$code];
+
+        if ($coupon['status'] !== 'active') {
+            return ['ok' => false, 'error' => 'Cupón ya utilizado', 'http' => 422];
+        }
+
+        if (strtotime($coupon['expires_at']) < time()) {
+            return ['ok' => false, 'error' => 'Cupón caducado', 'http' => 422];
+        }
+
+        // Marcar como usado
+        $coupons[$code]['status']     = 'used';
+        $coupons[$code]['used_at']    = date('c');
+        $coupons[$code]['used_by_ip'] = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+        $coupons[$code]['used_order'] = $orderId;
+
+        writeCoupons($lockFile, $coupons);
+
+        return ['ok' => true, 'amount' => $coupon['amount']];
+    });
+
+    if (!$result['ok']) {
+        http_response_code($result['http'] ?? 422);
+        echo json_encode($result);
+        exit();
+    }
+
+    logCouponUsage($evento, $code, $result['amount'], 'REDEEM');
+
+    echo json_encode([
+        'ok'     => true,
+        'amount' => $result['amount'],
+        'amount_eur' => number_format($result['amount'] / 100, 2, '.', '') . '€',
+    ]);
+    exit();
+}
+
+// ── GET /coupon/list (Panel admin — lista cupones de un evento) ────────────
+if ($uri === '/coupon/list' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    $evento = normalizeCouponEvent($_GET['evento'] ?? '');
+
+    if (!$evento) {
+        http_response_code(400);
+        echo json_encode(['error' => 'evento requerido']);
+        exit();
+    }
+
+    $couponFile = getCouponFile($evento);
+    $coupons    = readCoupons($couponFile);
+
+    // Añadir info derivada a cada cupón para el panel
+    $list = [];
+    foreach ($coupons as $code => $c) {
+        $list[] = array_merge($c, [
+            'code'       => $code,
+            'amount_eur' => number_format($c['amount'] / 100, 2, '.', '') . '€',
+            'expired'    => strtotime($c['expires_at']) < time(),
+        ]);
+    }
+
+    // Ordenar: activos primero, luego por fecha de creación desc
+    usort($list, function($a, $b) {
+        if ($a['status'] !== $b['status']) {
+            return $a['status'] === 'active' ? -1 : 1;
+        }
+        return strcmp($b['created_at'], $a['created_at']);
+    });
+
+    echo json_encode(['ok' => true, 'evento' => $evento, 'coupons' => $list]);
+    exit();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+// ── FIN SISTEMA DE CUPONES ────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+
 http_response_code(404);
 echo json_encode(['error' => 'Ruta no encontrada', 'uri' => $uri]);
