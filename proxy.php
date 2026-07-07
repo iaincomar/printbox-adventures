@@ -883,24 +883,29 @@ function writeCoupons($file, $coupons) {
 
 /**
  * Genera un código de cupón con firma HMAC para evitar falsificaciones.
- * Formato: XXXXXXXX-YYYY  (8 chars aleatorios + 4 chars HMAC)
+ * Formato breve: XXXXXXX-YYY (6 chars aleatorios + 3 chars HMAC)
  */
 function generateCouponCode() {
-    $random = strtoupper(bin2hex(random_bytes(4))); // 8 chars hex
-    $hmac   = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, 4));
+    $random = strtoupper(bin2hex(random_bytes(3))); // 6 chars hex
+    $hmac   = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, 3));
     return $random . '-' . $hmac;
 }
 
 /**
  * Verifica que el código de cupón tiene una firma HMAC válida.
- * Protege contra códigos inventados manualmente.
+ * Protege contra códigos inventados manualmente y sigue admitiendo códigos antiguos.
  */
 function verifyCouponCode($code) {
     $parts = explode('-', $code);
     if (count($parts) !== 2) return false;
     [$random, $hmac] = $parts;
-    if (strlen($random) !== 8 || strlen($hmac) !== 4) return false;
-    $expected = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, 4));
+
+    $isLegacy = strlen($random) === 8 && strlen($hmac) === 4;
+    $isShort = strlen($random) === 6 && strlen($hmac) === 3;
+    if (!$isLegacy && !$isShort) return false;
+
+    $expectedLength = $isLegacy ? 4 : 3;
+    $expected = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, $expectedLength));
     return hash_equals($expected, $hmac);
 }
 
