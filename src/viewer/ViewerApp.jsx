@@ -428,10 +428,12 @@ export default function ViewerApp() {
         <div className="modal d-block event-modal-overlay" tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark border border-secondary event-modal">
-              <button type="button" className="btn-close btn-close-white position-absolute" style={{ top: '10px', right: '10px' }} onClick={() => { setShowAdminModal(false); setAdminPassword(''); setAdminError('') }} />
+              <div className="modal-header border-secondary justify-content-between align-items-center">
+                <h5 className="modal-title text-light mb-0">Panel de Administración</h5>
+                <button type="button" className="btn-close btn-close-white" onClick={() => { setShowAdminModal(false); setAdminPassword(''); setAdminError('') }} aria-label="Cerrar" />
+              </div>
               <div className="modal-body text-center p-4 p-md-5">
                 <img src="/assets/ic_launcher.png" alt="Logo" className="event-modal-logo" />
-                <h4 className="event-modal-title">Panel de Administración</h4>
                 <p className="event-modal-subtitle">Introduce la contraseña</p>
                 <div className="input-group mb-2 event-modal-input-group">
                   <span className="input-group-text bg-black border-secondary text-warning fw-bold font-mono fs-5"><i className="bi bi-lock"></i></span>
@@ -598,23 +600,28 @@ export default function ViewerApp() {
 
       {/* Header y galería */}
       <header className="viewer-header">
+        <div className="viewer-header-top">
+          <div className="viewer-header-brand">
+            <span className="brand-main">PRINTBOX</span>
+            <span className="brand-sub">ADVENTURE</span>
+          </div>
+        </div>
         <div className="viewer-header-inner">
-          <div className="viewer-header-title">{textos?.empresa || 'Printbox Adventure'}</div>
           <div className="viewer-header-subtitle">
             {uuid ? 'Selecciona tu foto para imprimir' : 'Introduce el evento para ver las fotos'}
           </div>
+          {uuid && (
+            <div className="viewer-header-actions">
+              <button className={`btn btn-sm header-action-btn ${autoplay ? 'header-action-btn-active' : ''}`} onClick={() => setAutoplay(!autoplay)} title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (15s por página)'}><i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />{autoplay ? 'Autoplay ON' : 'Autoplay'}</button>
+              <button className="btn btn-sm header-action-btn" onClick={() => setShowQR(!showQR)} title="Mostrar QR"><i className="bi bi-qr-code me-1" />{showQR ? 'Ocultar QR' : 'Ver QR'}</button>
+              <button className="btn btn-sm header-action-btn" onClick={() => setShowPrivacyModal(true)}><i className="bi bi-info-circle me-1" /> Términos</button>
+              <button className="btn btn-sm header-action-btn" onClick={() => setShowAdminModal(true)}><i className="bi bi-gear me-1" /> Configuración</button>
+              <button className="btn btn-sm header-action-btn" onClick={() => loadAllPhotos(currentPage)} disabled={loading}><i className={`bi ${loading ? 'bi-hourglass-split spin' : 'bi-arrow-repeat'} me-1`} />{loading ? 'Cargando...' : 'Refrescar'}</button>
+            </div>
+          )}
         </div>
         {error && <div className="alert alert-danger viewer-error-alert">{error}</div>}
       </header>
-      {uuid && (
-        <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', padding: '10px', flexWrap: 'wrap' }}>
-          <button className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'} bg-dark border-success`} onClick={() => setAutoplay(!autoplay)} title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (15s por página)'}><i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />{autoplay ? 'Autoplay ON' : 'Autoplay OFF'}</button>
-          <button className="btn btn-sm btn-outline-info bg-dark border-info" onClick={() => setShowQR(!showQR)} title="Mostrar QR"><i className="bi bi-qr-code me-1" />{showQR ? 'Ocultar QR' : 'Mostrar QR'}</button>
-          <button className="btn btn-sm btn-outline-light bg-dark border-light" onClick={() => setShowPrivacyModal(true)}><i className="bi bi-info-circle me-1" /> Términos</button>
-          <button className="btn btn-sm btn-outline-warning bg-dark border-warning" onClick={() => setShowAdminModal(true)}><i className="bi bi-gear me-1" /> Admin</button>
-          <button className="btn btn-sm btn-outline-primary bg-dark border-primary" onClick={() => loadAllPhotos(currentPage)} disabled={loading}><i className={`bi ${loading ? 'bi-hourglass-split spin' : 'bi-arrow-repeat'} me-1`} />{loading ? 'Cargando...' : 'Actualizar'}</button>
-        </div>
-      )}
       {showQR && uuid && (
         <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.7)' }} tabIndex="-1">
           <div className="modal-dialog modal-dialog-centered">
