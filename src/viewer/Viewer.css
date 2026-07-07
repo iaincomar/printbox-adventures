@@ -9,19 +9,76 @@
 
 /* ========== HEADER ========== */
 .viewer-header {
+  position: relative;
+  isolation: isolate;
   height: 90px !important;
   min-height: 90px !important;
   max-height: 90px !important;
   overflow: hidden !important;
   flex-shrink: 0 !important;
   flex-grow: 0 !important;
-  background-image: url(/assets/banners-AdventureSup.png);
-  background-size: 100% 100%;
-  background-repeat: no-repeat;
-  background-position: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  padding: 0 1.2rem;
+  background:
+    radial-gradient(circle at 18% 28%, rgba(247, 198, 4, 0.18), transparent 18%),
+    radial-gradient(circle at 82% 22%, rgba(255, 255, 255, 0.08), transparent 15%),
+    radial-gradient(circle at 50% 18%, rgba(255, 255, 255, 0.04), transparent 10%),
+    linear-gradient(180deg, #090909 0%, #121212 40%, #0d0d0f 78%, #070707 100%);
+  box-shadow: inset 0 0 38px rgba(0,0,0,0.45);
+}
+
+.viewer-header-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+}
+
+.viewer-header-title {
+  color: #f7c604;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.viewer-header-subtitle {
+  color: rgba(255,255,255,0.82);
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+
+.viewer-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 40% 30%, rgba(255,255,255,0.06), transparent 20%),
+    linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.06) 18%, transparent 44%, rgba(247,198,4,0.12) 72%, transparent 100%);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.viewer-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  background: linear-gradient(90deg, #f7c604 0%, #ffbb3f 50%, #f7c604 100%);
+  pointer-events: none;
 }
 
 .viewer-error-alert {
+  position: relative;
+  z-index: 1;
   margin-bottom: 0;
   border-radius: 0;
   padding: 0.25rem 1rem;

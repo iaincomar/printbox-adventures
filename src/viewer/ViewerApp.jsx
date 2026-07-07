@@ -596,8 +596,16 @@ export default function ViewerApp() {
         </div>
       )}
 
-      {/* Header y galería (sin cambios) */}
-      <header className="viewer-header">{error && <div className="alert alert-danger viewer-error-alert">{error}</div>}</header>
+      {/* Header y galería */}
+      <header className="viewer-header">
+        <div className="viewer-header-inner">
+          <div className="viewer-header-title">{textos?.empresa || 'Printbox Adventure'}</div>
+          <div className="viewer-header-subtitle">
+            {uuid ? 'Selecciona tu foto para imprimir' : 'Introduce el evento para ver las fotos'}
+          </div>
+        </div>
+        {error && <div className="alert alert-danger viewer-error-alert">{error}</div>}
+      </header>
       {uuid && (
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', padding: '10px', flexWrap: 'wrap' }}>
           <button className={`btn btn-sm ${autoplay ? 'btn-success' : 'btn-outline-success'} bg-dark border-success`} onClick={() => setAutoplay(!autoplay)} title={autoplay ? 'Detener autoplay' : 'Iniciar autoplay (15s por página)'}><i className={`bi ${autoplay ? 'bi-pause-circle-fill' : 'bi-play-circle-fill'} me-1`} />{autoplay ? 'Autoplay ON' : 'Autoplay OFF'}</button>
