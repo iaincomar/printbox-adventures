@@ -602,7 +602,7 @@ export default function ViewerApp() {
       <header className="viewer-header">
         <div className="viewer-header-top">
           <div className="viewer-header-brand">
-            <img src="/assets/logo-adventure.png" alt="Printbox Adventure" className="header-logo" />
+            <img src="/assets/IcHeaderWhite.png" alt="Printbox Adventure" className="header-logo" />
             <div>
               <span className="brand-main">PRINTBOX</span>
               <span className="brand-sub">ADVENTURE</span>
