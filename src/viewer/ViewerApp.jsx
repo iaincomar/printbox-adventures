@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { findEvent, getEventPhotos, printJob, saveConfig, getConfig, sendPhoto, processPayment } from '../shared/api'
+import { findEvent, getEventPhotos, printJob, saveConfig, getConfig, sendPhoto, processPayment, checkAdminPassword } from '../shared/api'
 import { useInterval } from '../shared/hooks/useInterval'
 import './Viewer.css'
 
@@ -52,6 +52,10 @@ export default function ViewerApp() {
   const [showAdminModal, setShowAdminModal] = useState(false)
   const [adminPassword, setAdminPassword] = useState('')
   const [adminError, setAdminError] = useState('')
+  // Contraseña verificada de la sesión de Admin: se reenvía en cada escritura
+  // (guardar config, crear/listar cupones) vía X-Admin-Password — no hay cookie de
+  // sesión, así que el servidor la vuelve a comprobar en cada llamada.
+  const [adminAuthPassword, setAdminAuthPassword] = useState('')
   const [adminEventCode, setAdminEventCode] = useState('')
   const [adminPrinterEventCode, setAdminPrinterEventCode] = useState('')
   const [adminPrice1, setAdminPrice1] = useState('')
@@ -121,7 +125,9 @@ export default function ViewerApp() {
     const saved = loadViewerState()
     const eventoFromStorage = saved?.config?.evento
     const eventCode = eventoFromStorage ? eventoFromStorage.replace('ev-', '') : ''
-    const configUrl = BACKEND === '/' ? '/config' : `${BACKEND}/config`
+    // /config/ con barra final: sin ella, Apache trata "config" como la carpeta real
+    // (ahora protegida por config/.htaccess) y devuelve 403 antes de reescribir a proxy.php.
+    const configUrl = BACKEND === '/' ? '/config/' : `${BACKEND}/config/`
     const configUrlWithEvent = eventCode ? `${configUrl}?eventCode=${encodeURIComponent(eventCode)}` : configUrl
     Promise.all([
       fetch(configUrlWithEvent).then(r => r.json()),
@@ -167,7 +173,9 @@ export default function ViewerApp() {
   }
 
   async function handleAdminLogin() {
-    if (adminPassword !== 'admin123') { setAdminError('Contraseña incorrecta'); return }
+    const ok = await checkAdminPassword(adminPassword).catch(() => false)
+    if (!ok) { setAdminError('Contraseña incorrecta'); return }
+    setAdminAuthPassword(adminPassword)
     setAdminError('')
     setAdminPassword('')
     setShowAdminModal(false)
@@ -193,7 +201,7 @@ export default function ViewerApp() {
     }
     setAdminError('')
     try {
-      const saveResult = await saveConfig(newConfig, newTextos, adminEventCode)
+      const saveResult = await saveConfig(newConfig, newTextos, adminEventCode, adminAuthPassword)
       if (saveResult.textos) { setTextos(saveResult.textos); localStorage.removeItem('printbox_viewer_state') }
       if (saveResult.config) setConfig(saveResult.config)
       setAdminError('✓ Precios guardados correctamente')
@@ -253,7 +261,12 @@ export default function ViewerApp() {
     return isNaN(p) ? '0' : p.toFixed(2)
   }
   const totalCents = Math.round(parseFloat(totalPrice()) * 100)
-  const discountCents = (appliedCoupon?.type === 'discount') ? appliedCoupon.amount : 0
+  const couponDiscountCents = (total) => {
+    if (!appliedCoupon) return 0
+    if (appliedCoupon.type === 'full') return Math.min(appliedCoupon.amount, total)
+    return appliedCoupon.type === 'discount' ? appliedCoupon.amount : 0
+  }
+  const discountCents = couponDiscountCents(totalCents)
   const finalCents = Math.max(0, totalCents - discountCents)
   const finalPrice = (finalCents / 100).toFixed(2)
 
@@ -304,7 +317,7 @@ export default function ViewerApp() {
     if (paymentMethod === 'square' && !squareCard) { setSquareError('Square no inicializado'); return }
 
     // Validar cupón tipo full
-    if (appliedCoupon?.type === 'full' && finalCents > 0) {
+    if (appliedCoupon?.type === 'full' && appliedCoupon.amount < totalCents) {
       setCouponError('El cupón de pago completo no cubre el total')
       return
     }
@@ -317,7 +330,12 @@ export default function ViewerApp() {
           setSquareLoading(true)
           const result = await squareCard.tokenize()
           if (result.status !== 'OK') throw new Error(result.errors?.[0]?.message || 'Tokenización fallida')
-          await processPayment({ token: result.token, amount: String(finalCents), currency: 'EUR', location_id: SQUARE_LOCATION_ID })
+          await processPayment({
+            token: result.token,
+            amount: String(finalCents),
+            currency: 'EUR',
+            order: { eventCode: (config?.evento || '').replace('ev-', ''), copies: [copies], coupon: appliedCoupon ? couponCode : null },
+          })
           setSquareLoading(false)
         } else if (paymentMethod === 'paypal') {
           // PayPal se maneja aparte con createOrder, pero aquí el flujo es unificado.
@@ -376,7 +394,7 @@ export default function ViewerApp() {
     try {
       const res = await fetch('/coupon/create', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminAuthPassword },
         body: JSON.stringify({ evento, amount: Math.round(euros * 100), expires_hours: parseInt(couponGenHours) || 72, type: couponGenType }),
       })
       const json = await res.json()
@@ -391,7 +409,9 @@ export default function ViewerApp() {
     if (!evento) return
     setCouponListLoading(true)
     try {
-      const res = await fetch(`/coupon/list?evento=${encodeURIComponent(evento)}`)
+      const res = await fetch(`/coupon/list?evento=${encodeURIComponent(evento)}`, {
+        headers: { 'X-Admin-Password': adminAuthPassword },
+      })
       const json = await res.json()
       if (json.ok) setCouponList(json.coupons || [])
     } catch (e) { /* silenciar */ }

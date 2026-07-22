@@ -2,9 +2,24 @@
 error_reporting(E_ALL);
 ini_set('display_errors', 0); // No mostrar errores en producción
 
-header('Access-Control-Allow-Origin: *');
+// Sin cookies de sesión aquí (el admin se verifica por contraseña en cada escritura,
+// no por cookie), así que no hace falta Allow-Credentials. Aun así no se refleja
+// CUALQUIER origen: solo el propio dominio y orígenes de desarrollo local, para no
+// dejar que cualquier web de internet lea la config/cupones vía fetch cross-origin.
+$__origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($__origin !== '') {
+    $__host  = $_SERVER['HTTP_HOST'] ?? '';
+    $__self  = ['http://' . $__host, 'https://' . $__host];
+    $__isDev = (bool) preg_match('#^https?://(localhost|127\.0\.0\.1|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$#i', $__origin);
+    if (in_array($__origin, $__self, true) || $__isDev) {
+        header('Access-Control-Allow-Origin: ' . $__origin);
+        header('Vary: Origin');
+    }
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, DELETE');
-header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With, X-Admin-Password');
 header('Access-Control-Max-Age: 86400');
 
 // Responder a preflight requests
@@ -142,6 +157,142 @@ function getPaypalCredentials($configDir) {
     return $credentials;
 }
 
+// Credenciales de Square: variable de entorno si existe, si no config/square.json
+// (fuera de git, protegido por config/.htaccess). Nunca hardcodeadas en el código.
+function getSquareCredentials($configDir) {
+    $accessToken = getenv('SQUARE_ACCESS_TOKEN') ?: '';
+    $locationId  = getenv('SQUARE_LOCATION_ID') ?: '';
+    if (!$accessToken || !$locationId) {
+        $file = $configDir . '/square.json';
+        if (file_exists($file)) {
+            $parsed = json_decode(file_get_contents($file), true);
+            if (is_array($parsed)) {
+                if (!$accessToken) $accessToken = $parsed['accessToken'] ?? '';
+                if (!$locationId)  $locationId  = $parsed['locationId'] ?? '';
+            }
+        }
+    }
+    return ['accessToken' => $accessToken, 'locationId' => $locationId];
+}
+
+// ── Autenticación de Admin ──────────────────────────────────────────────────
+// Un único panel de Admin (sin multi-tenant), así que no hace falta sesión/cookie:
+// cada escritura (guardar config, crear/listar cupones) exige la contraseña en la
+// cabecera X-Admin-Password, verificada aquí con password_verify() contra el hash
+// bcrypt guardado en config/admin.json (nunca en texto plano ni en el código).
+function getAdminPasswordHash($configDir) {
+    $f = $configDir . '/admin.json';
+    if (is_file($f)) {
+        $parsed = json_decode(@file_get_contents($f), true);
+        if (is_array($parsed) && !empty($parsed['passHash'])) return $parsed['passHash'];
+    }
+    return null;
+}
+
+function checkAdminAuth($configDir) {
+    $hash = getAdminPasswordHash($configDir);
+    if (!$hash) return false; // sin config/admin.json no hay forma de entrar — fallar cerrado
+    $sent = $_SERVER['HTTP_X_ADMIN_PASSWORD'] ?? '';
+    if ($sent === '') return false;
+    return password_verify($sent, $hash);
+}
+
+// Clave secreta para firmar los códigos de cupón: aleatoria, generada una vez y
+// guardada en config/coupon_secret.txt (fuera de git, protegida por config/.htaccess).
+function getCouponSecret($configDir) {
+    $f = $configDir . '/coupon_secret.txt';
+    if (is_file($f)) { $s = trim(@file_get_contents($f)); if ($s !== '') return $s; }
+    $secret = bin2hex(random_bytes(32));
+    if (!is_dir($configDir)) @mkdir($configDir, 0755, true);
+    @file_put_contents($f, $secret);
+    return $secret;
+}
+
+// Lee precio1/2/3 del evento (o global si no hay eventCode) para recalcular el
+// importe en el servidor — nunca confiar en el importe que manda el cliente.
+function pbhReadPrices($configDir, $eventCode) {
+    $prices = ['precio1' => 5.0, 'precio2' => 9.0, 'precio3' => 12.0];
+    $textosFile = getTextosFile($configDir, $eventCode);
+    clearstatcache(true, $textosFile);
+    if (!file_exists($textosFile)) return $prices;
+    foreach (file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        $parts = explode(':', trim($line), 2);
+        $key = trim($parts[0] ?? '');
+        if (in_array($key, ['precio1', 'precio2', 'precio3'], true)) {
+            $prices[$key] = (float) trim($parts[1] ?? '');
+        }
+    }
+    return $prices;
+}
+
+// Cupón aplicado (sin consumirlo) para restar del importe esperado: mismo criterio
+// que /coupon/validate (firma HMAC + activo + no caducado), pero de solo lectura.
+function pbhCouponDiscountCents($eventCode, $couponCode, $expectedCents) {
+    if (!$couponCode) return 0;
+    $code = strtoupper(trim($couponCode));
+    if (!verifyCouponCode($code)) return 0;
+    $coupons = readCoupons(getCouponFile($eventCode));
+    if (!isset($coupons[$code])) return 0;
+    $c = $coupons[$code];
+    if (($c['status'] ?? '') !== 'active') return 0;
+    if (strtotime($c['expires_at'] ?? '') < time()) return 0;
+    if (($c['type'] ?? 'discount') === 'full') return min((int) $c['amount'], $expectedCents);
+    return min((int) $c['amount'], $expectedCents);
+}
+
+// Recalcula el importe esperado a partir de las copias reales del pedido y los
+// precios configurados del evento — el importe que mande el cliente DEBE coincidir.
+function pbhCheckAmountCents($configDir, $data, $amountCents, &$err) {
+    $order = is_array($data['order'] ?? null) ? $data['order'] : null;
+    if (!$order || !isset($order['copies']) || !is_array($order['copies'])) {
+        $err = 'Falta el detalle del pedido (order.copies)';
+        return false;
+    }
+    $eventCode = preg_replace('/^ev[-_]?/i', '', trim((string) ($order['eventCode'] ?? '')));
+    $prices = pbhReadPrices($configDir, $eventCode);
+    $table  = [0, $prices['precio1'], $prices['precio2'], $prices['precio3']];
+
+    $total = 0.0;
+    foreach ($order['copies'] as $c) {
+        $n = intval($c);
+        if ($n < 1) continue;
+        if ($n > 3) $n = 3;
+        $total += $table[$n];
+    }
+    $expected = (int) round($total * 100);
+    $expected = max(0, $expected - pbhCouponDiscountCents($eventCode, $order['coupon'] ?? null, $expected));
+
+    if ($amountCents !== $expected) {
+        $err = 'El importe no coincide con el pedido';
+        return false;
+    }
+    return true;
+}
+
+// ¿De verdad cambian los precios/textos respecto a lo que ya hay en disco? Se
+// compara siempre contra el fichero real (nunca contra lo que el cliente "declare"
+// que está haciendo), para que /config POST pueda seguir usándose sin contraseña
+// para elegir qué evento se monitoriza (acción operativa, sin impacto económico)
+// pero SÍ la exija en cuanto se toquen precios/empresa de verdad.
+function pbhTextosChanged($configDir, $eventCode, $newTextos) {
+    if (!is_array($newTextos)) return false;
+    $textosFile = getTextosFile($configDir, $eventCode);
+    clearstatcache(true, $textosFile);
+    $current = ['text_es' => '', 'text_en' => '', 'text_fr' => '', 'text_de' => '', 'precio1' => '', 'precio2' => '', 'precio3' => '', 'empresa' => ''];
+    if (file_exists($textosFile)) {
+        $keyMap = ['es' => 'text_es', 'en' => 'text_en', 'fr' => 'text_fr', 'de' => 'text_de'];
+        foreach (file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+            $parts = explode(':', trim($line), 2);
+            $key = $keyMap[trim($parts[0])] ?? trim($parts[0]);
+            if (isset($current[$key])) $current[$key] = trim($parts[1] ?? '');
+        }
+    }
+    foreach ($current as $key => $val) {
+        if ((string) ($newTextos[$key] ?? '') !== (string) $val) return true;
+    }
+    return false;
+}
+
 function getCsrfToken() {
     global $PRINTBOX_BASE, $cookiePath;
     $ch = curl_init($PRINTBOX_BASE . '/sanctum/csrf-cookie');
@@ -200,16 +351,37 @@ function proxyPost($url, $data, $extraHeaders = []) {
 $body = file_get_contents('php://input');
 $data = json_decode($body, true) ?? [];
 
-// Log TODOS los requests para debuggear
-@file_put_contents(__DIR__ . '/pba_requests.log', 
-    date('Y-m-d H:i:s') . " {$_SERVER['REQUEST_METHOD']} {$_SERVER['REQUEST_URI']} " . 
-    "Content-Length:" . ($_SERVER['CONTENT_LENGTH'] ?? '0') . " Body:" . substr($body, 0, 200) . "\n", 
+// Log TODOS los requests para debuggear — el body de rutas sensibles (contraseña de
+// admin, tokens de pago) nunca se loguea en texto plano.
+$__uriForLog = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$__sensitive = ['/auth/', '/process-payment', '/paypal/', '/coupon/'];
+$__isSensitiveLog = false;
+foreach ($__sensitive as $__s) { if (strpos($__uriForLog, $__s) !== false) { $__isSensitiveLog = true; break; } }
+@file_put_contents(__DIR__ . '/pba_requests.log',
+    date('Y-m-d H:i:s') . " {$_SERVER['REQUEST_METHOD']} {$_SERVER['REQUEST_URI']} " .
+    "Content-Length:" . ($_SERVER['CONTENT_LENGTH'] ?? '0') . " Body:" . ($__isSensitiveLog ? '[redacted]' : substr($body, 0, 200)) . "\n",
     FILE_APPEND);
 
 header('Content-Type: application/json');
 
 // ── /health ──
 if ($uri === '/health') {
+    echo json_encode(['ok' => true]);
+    exit();
+}
+
+// ── /auth/check (verifica la contraseña de Admin sin crear sesión) ──
+// Solo da feedback inmediato en el modal de acceso; la protección real está en que
+// cada escritura (POST /config, /coupon/create, /coupon/list) exige la MISMA
+// contraseña otra vez en la cabecera X-Admin-Password.
+if ($uri === '/auth/check' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    $password = (string)($data['password'] ?? '');
+    $hash = getAdminPasswordHash(getConfigDir());
+    if (!$hash || $password === '' || !password_verify($password, $hash)) {
+        http_response_code(401);
+        echo json_encode(['ok' => false, 'error' => 'Contraseña incorrecta']);
+        exit();
+    }
     echo json_encode(['ok' => true]);
     exit();
 }
@@ -286,8 +458,21 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
     header('Pragma: no-cache');
     header('Expires: 0');
-    
+
     $configDir = getConfigDir();
+
+    // Obtener el código de evento del query string (para guardar precios específicos de cada evento)
+    $eventCode = $_GET['eventCode'] ?? '';
+    $eventCode = preg_replace('/^ev[-_]?/i', '', $eventCode);
+
+    // Solo cambiar precios/empresa de verdad exige la contraseña de Admin — elegir
+    // qué evento se monitoriza no la requiere (ver pbhTextosChanged).
+    if (pbhTextosChanged($configDir, $eventCode, $data['textos'] ?? null) && !checkAdminAuth($configDir)) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No autenticado']);
+        exit();
+    }
+
     if (!is_dir($configDir)) {
         if (!mkdir($configDir, 0755, true)) {
             http_response_code(500);
@@ -296,10 +481,6 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    // Obtener el código de evento del query string (para guardar precios específicos de cada evento)
-    $eventCode = $_GET['eventCode'] ?? '';
-    $eventCode = preg_replace('/^ev[-_]?/i', '', $eventCode);
-    
     $writeErrors = [];
 
     if (isset($data['config'])) {
@@ -427,55 +608,6 @@ if ($uri === '/config' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
-// ── /debug/config (para ver qué está en el archivo) ──
-if ($uri === '/debug/config' || $uri === '/debug/config/') {
-    $configDir = getConfigDir();
-    $textosFile = $configDir . '/textos.txt';
-    $logFile = $configDir . '/debug.log';
-    
-    $result = [
-        'configDir' => $configDir,
-        'textosFile' => $textosFile,
-        'fileExists' => file_exists($textosFile),
-        'isWritable' => is_writable($configDir),
-        'rawContent' => file_exists($textosFile) ? file_get_contents($textosFile) : 'archivo no existe',
-        'lastLog' => file_exists($logFile) ? implode("\n", array_slice(file($logFile, FILE_IGNORE_NEW_LINES), -5)) : 'sin logs',
-    ];
-    
-    // Como JSON devolvemos lo que está en el archivo
-    if (file_exists($textosFile)) {
-        $lines = file($textosFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        $result['parsed'] = [];
-        $keyMap = ['es' => 'text_es', 'en' => 'text_en', 'fr' => 'text_fr', 'de' => 'text_de'];
-        foreach ($lines as $line) {
-            $parts = explode(':', $line, 2);
-            $shortKey = trim($parts[0]);
-            $val = trim($parts[1] ?? '');
-            $key = isset($keyMap[$shortKey]) ? $keyMap[$shortKey] : $shortKey;
-            $result['parsed'][$key] = $val;
-        }
-    }
-    
-    echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
-    exit();
-}
-
-// ── /reset-config (restaurar valores por defecto) ──
-if ($uri === '/reset-config' || $uri === '/reset-config/') {
-    $configDir = getConfigDir();
-    if (!is_dir($configDir)) {
-        mkdir($configDir, 0755, true);
-    }
-    
-    $defaultContent = "es:¡Consigue tu foto del evento!\nen:Get your event photo!\nfr:Obtenez votre photo!\nde:Hol dir dein Foto!\nprecio1:5\nprecio2:9\nprecio3:12\nempresa:Printbox Adventure";
-    
-    file_put_contents($configDir . '/textos.txt', $defaultContent);
-    @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " RESET /reset-config\n", FILE_APPEND);
-    clearstatcache();
-    
-    echo json_encode(['ok' => true, 'message' => 'Config restaurada a valores por defecto']);
-    exit();
-}
 
 // ── /print/* (simulados) ──
 if ($uri === '/print/count')    { echo json_encode(['count' => 0]);          exit(); }
@@ -638,16 +770,29 @@ if (strpos($uri, '/proxy-image/') === 0) {
 // ── /process-payment (Square payment processing) ──
 if ($uri === '/process-payment') {
     $data = json_decode(file_get_contents('php://input'), true);
+    $configDir = getConfigDir();
 
-    $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
-    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
+    $square = getSquareCredentials($configDir);
+    if (!$square['accessToken']) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Square no configurado en el servidor']);
+        exit();
+    }
 
-    $amount = isset($data['amount']) ? intval($data['amount']) : 0;  // Ya viene en centavos desde el viewer
-    $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
+    $amount = isset($data['amount']) ? intval($data['amount']) : 0;  // Ya viene en centavos desde el cliente
+    // location_id SIEMPRE del servidor: si viene del cliente se puede desviar el cobro.
+    $location = $square['locationId'];
 
     if (!$data['token'] || $amount <= 0) {
         http_response_code(400);
         echo json_encode(['error' => 'token y amount son requeridos']);
+        exit;
+    }
+
+    $amountError = '';
+    if (!pbhCheckAmountCents($configDir, $data, $amount, $amountError)) {
+        http_response_code(400);
+        echo json_encode(['error' => $amountError]);
         exit;
     }
 
@@ -661,14 +806,10 @@ if ($uri === '/process-payment') {
         "location_id" => $location
     ]);
 
-    // Log de petición para debuggear
-    $configDir = getConfigDir();
-    @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /process-payment Request: " . $payload . "\n", FILE_APPEND);
-
     $url = "https://connect.squareup.com/v2/payments";
     $ch = curl_init($url);
     curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . $SQUARE_ACCESS_TOKEN,
+        'Authorization: Bearer ' . $square['accessToken'],
         'Content-Type: application/json'
     ]);
     curl_setopt($ch, CURLOPT_POST, true);
@@ -678,9 +819,6 @@ if ($uri === '/process-payment') {
     $response = curl_exec($ch);
     $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
-
-    // Log de respuesta de Square para debuggear
-    @file_put_contents($configDir . '/debug.log', date('Y-m-d H:i:s') . " POST /process-payment Response: HTTP $httpCode " . substr($response, 0, 500) . "\n", FILE_APPEND);
 
     http_response_code($httpCode ?: 500);
     echo $response;
@@ -716,6 +854,13 @@ if ($uri === '/paypal/create-order') {
     if (!$amount) {
         http_response_code(400);
         echo json_encode(['error' => 'amount es requerido']);
+        exit();
+    }
+
+    $amountError = '';
+    if (!pbhCheckAmountCents(getConfigDir(), $data, (int) round(floatval($amount) * 100), $amountError)) {
+        http_response_code(400);
+        echo json_encode(['error' => $amountError]);
         exit();
     }
 
@@ -785,57 +930,9 @@ if ($uri === '/paypal/capture-order') {
     exit();
 }
 
-// Ruta antigua: /proxy.php?route=process-payment (deprecated, kept for backward compatibility)
-if ($_GET['route'] === 'process-payment') {
-    $data = json_decode(file_get_contents('php://input'), true);
-
-    $SQUARE_ACCESS_TOKEN = getenv('SQUARE_ACCESS_TOKEN') ?: 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8';
-    $SQUARE_LOCATION_ID = getenv('SQUARE_LOCATION_ID') ?: 'LHB32XGQK68GX';
-
-    $amount = isset($data['amount']) ? intval($data['amount']) : 0;  // Ya viene en centavos desde el viewer
-    $location = $data['location_id'] ?? $SQUARE_LOCATION_ID;
-
-    if (!$data['token'] || $amount <= 0) {
-        http_response_code(400);
-        echo json_encode(['error' => 'token y amount son requeridos']);
-        exit;
-    }
-
-    $payload = json_encode([
-        "source_id" => $data['token'],
-        "idempotency_key" => uniqid('pba_', true),
-        "amount_money" => [
-            "amount" => $amount,
-            "currency" => ($data['currency'] ?? 'EUR')
-        ],
-        "location_id" => $location
-    ]);
-
-    $url = "https://connect.squareup.com/v2/payments";
-    $ch = curl_init($url);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        'Authorization: Bearer ' . $SQUARE_ACCESS_TOKEN,
-        'Content-Type: application/json'
-    ]);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    http_response_code($httpCode ?: 500);
-    echo $response;
-    exit();
-}
-
 // ══════════════════════════════════════════════════════════════════════════
 // ── SISTEMA DE CUPONES ────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════
-
-// Clave secreta para firmar los códigos. Cámbiala y guárdala en secreto.
-define('COUPON_SECRET', 'pba_s3cr3t_k3y_2026');
 
 /**
  * Normaliza el código de evento (quita prefijo ev- / ev_)
@@ -887,7 +984,7 @@ function writeCoupons($file, $coupons) {
  */
 function generateCouponCode() {
     $random = strtoupper(bin2hex(random_bytes(3))); // 6 chars hex
-    $hmac   = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, 3));
+    $hmac   = strtoupper(substr(hash_hmac('sha256', $random, getCouponSecret(getConfigDir())), 0, 3));
     return $random . '-' . $hmac;
 }
 
@@ -905,7 +1002,7 @@ function verifyCouponCode($code) {
     if (!$isLegacy && !$isShort) return false;
 
     $expectedLength = $isLegacy ? 4 : 3;
-    $expected = strtoupper(substr(hash_hmac('sha256', $random, COUPON_SECRET), 0, $expectedLength));
+    $expected = strtoupper(substr(hash_hmac('sha256', $random, getCouponSecret(getConfigDir())), 0, $expectedLength));
     return hash_equals($expected, $hmac);
 }
 
@@ -958,11 +1055,18 @@ function logCouponUsage($evento, $code, $amount, $action) {
     @file_put_contents($logFile, $line, FILE_APPEND | LOCK_EX);
 }
 
-// ── POST /coupon/create (Solo admin) ──────────────────────────────────────
+// ── POST /coupon/create (Solo admin autenticado) ───────────────────────────
 if ($uri === '/coupon/create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (!checkAdminAuth(getConfigDir())) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No autenticado']);
+        exit();
+    }
+
     $evento = normalizeCouponEvent($data['evento'] ?? '');
     $amount = intval($data['amount'] ?? 0); // en céntimos (ej: 500 = 5.00€)
     $expiresIn = intval($data['expires_hours'] ?? 72); // horas hasta caducar, default 72h
+    $type = ($data['type'] ?? 'discount') === 'full' ? 'full' : 'discount';
 
     if (!$evento) {
         http_response_code(400);
@@ -979,10 +1083,11 @@ if ($uri === '/coupon/create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $now  = time();
 
     $couponFile = getCouponFile($evento);
-    withCouponLock($couponFile, function($lockFile) use ($code, $amount, $now, $expiresIn) {
+    withCouponLock($couponFile, function($lockFile) use ($code, $amount, $now, $expiresIn, $type) {
         $coupons = readCoupons($lockFile);
         $coupons[$code] = [
             'amount'     => $amount,
+            'type'       => $type,
             'status'     => 'active',
             'created_at' => date('c', $now),
             'expires_at' => date('c', $now + ($expiresIn * 3600)),
@@ -999,6 +1104,7 @@ if ($uri === '/coupon/create' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'ok'     => true,
         'code'   => $code,
         'amount' => $amount,
+        'type'   => $type,
         'amount_eur' => number_format($amount / 100, 2, '.', '') . '€',
         'expires_at' => date('c', $now + ($expiresIn * 3600)),
     ]);
@@ -1049,6 +1155,7 @@ if ($uri === '/coupon/validate' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     echo json_encode([
         'valid'      => true,
         'amount'     => $coupon['amount'],
+        'type'       => $coupon['type'] ?? 'discount',
         'amount_eur' => number_format($coupon['amount'] / 100, 2, '.', '') . '€',
         'expires_at' => $coupon['expires_at'],
     ]);
@@ -1121,6 +1228,12 @@ if ($uri === '/coupon/redeem' && $_SERVER['REQUEST_METHOD'] === 'POST') {
 
 // ── GET /coupon/list (Panel admin — lista cupones de un evento) ────────────
 if ($uri === '/coupon/list' && $_SERVER['REQUEST_METHOD'] === 'GET') {
+    if (!checkAdminAuth(getConfigDir())) {
+        http_response_code(401);
+        echo json_encode(['error' => 'No autenticado']);
+        exit();
+    }
+
     $evento = normalizeCouponEvent($_GET['evento'] ?? '');
 
     if (!$evento) {

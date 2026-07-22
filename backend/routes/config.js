@@ -3,6 +3,7 @@ const router = express.Router()
 const path = require('path')
 const fs = require('fs-extra')
 const os = require('os')
+const { checkAdminAuth } = require('../lib/auth')
 
 function getConfigDir(req) {
   const dataDir = req.app.locals.dataDir ||
@@ -59,11 +60,33 @@ router.get('/', (req, res) => {
   }
 })
 
+// ¿De verdad cambian los precios/textos respecto a lo que ya hay en disco? Igual
+// que pbhTextosChanged() en proxy.php: elegir qué evento se monitoriza no exige
+// contraseña, pero tocar precios/empresa de verdad sí.
+function textosChanged(configDir, newTextos) {
+  if (!newTextos) return false
+  const textosFile = path.join(configDir, 'textos.txt')
+  const current = { text_es: '', text_en: '', text_fr: '', text_de: '', precio1: '', precio2: '', precio3: '', empresa: '' }
+  if (fs.existsSync(textosFile)) {
+    const keyMap = { es: 'text_es', en: 'text_en', fr: 'text_fr', de: 'text_de' }
+    fs.readFileSync(textosFile, 'utf8').split('\n').forEach((line) => {
+      const idx = line.indexOf(':')
+      if (idx === -1) return
+      const key = keyMap[line.slice(0, idx).trim()] || line.slice(0, idx).trim()
+      if (key in current) current[key] = line.slice(idx + 1).trim()
+    })
+  }
+  return Object.keys(current).some((key) => String(newTextos[key] || '') !== current[key])
+}
+
 router.post('/', (req, res) => {
   try {
     const CONFIG_DIR = getConfigDir(req)
-    fs.ensureDirSync(CONFIG_DIR)
     const { config, textos } = req.body
+    if (textosChanged(CONFIG_DIR, textos) && !checkAdminAuth(req, CONFIG_DIR)) {
+      return res.status(401).json({ error: 'No autenticado' })
+    }
+    fs.ensureDirSync(CONFIG_DIR)
 
     if (config) {
       const lines = [

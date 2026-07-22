@@ -210,7 +210,7 @@ export async function getConfig(eventCode = '') {
   }
 }
 
-export async function saveConfig(config, textos, eventCode = '') {
+export async function saveConfig(config, textos, eventCode = '', adminPassword = '') {
   // Si eventCode incluye prefijo 'ev-' o 'ev_', se elimina antes de guardar.
   // IMPORTANTE: usar /config/ con barra final para evitar redirect 301 de Apache.
   // Sin la barra, Apache redirige /config → /config/ y el redirect convierte POST en GET,
@@ -221,7 +221,7 @@ export async function saveConfig(config, textos, eventCode = '') {
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-Admin-Password': adminPassword },
       body: JSON.stringify({ config, textos }),
     })
     if (!res.ok) {
@@ -237,12 +237,24 @@ export async function saveConfig(config, textos, eventCode = '') {
   }
 }
 
-export async function createPayPalOrder({ amount, currency = 'EUR' }) {
+// Verifica la contraseña de Admin contra el servidor (sin crear sesión) — solo da
+// feedback inmediato en el modal de acceso. La protección real de cada escritura
+// está en enviar la MISMA contraseña otra vez vía X-Admin-Password (ver saveConfig).
+export async function checkAdminPassword(password) {
+  const res = await fetch(`${BACKEND_URL}/auth/check`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password }),
+  })
+  return res.ok
+}
+
+export async function createPayPalOrder({ amount, currency = 'EUR', order }) {
   const url = `${BACKEND_URL || ''}/paypal/create-order`
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ amount, currency }),
+    body: JSON.stringify({ amount, currency, order }),
   })
   const data = await res.json()
   if (!res.ok) {
@@ -278,13 +290,14 @@ export async function getPayPalConfig() {
   return data
 }
 
-export async function processPayment({ token, amount, currency = 'EUR', location_id }) {
+export async function processPayment({ token, amount, currency = 'EUR', order }) {
   const url = `${BACKEND_URL || ''}/process-payment`
   try {
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, amount, currency, location_id }),
+      // location_id ya no se manda: el servidor usa siempre el suyo, nunca el del cliente.
+      body: JSON.stringify({ token, amount, currency, order }),
     })
     const data = await res.json()
     

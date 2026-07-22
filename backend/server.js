@@ -8,6 +8,7 @@ const fetch = require('node-fetch')
 const printRoutes = require('./routes/print')
 const configRoutes = require('./routes/config')
 const printboxRoutes = require('./routes/printbox')
+const { getAdminPasswordHash, bcrypt } = require('./lib/auth')
 
 const app = express()
 const PORT = 4000
@@ -60,26 +61,87 @@ app.use('/descargas', express.static(path.join(DATA_DIR, 'descargas')))
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
+const baseConfigDir = path.join(DATA_DIR, 'config')
+
+// Verifica la contraseña de Admin sin crear sesión (solo feedback en el modal de
+// acceso). La protección real está en que cada escritura exige la MISMA contraseña
+// otra vez en la cabecera X-Admin-Password (ver backend/lib/auth.js).
+app.post('/auth/check', (req, res) => {
+  const hash = getAdminPasswordHash(baseConfigDir)
+  const password = String(req.body?.password || '')
+  if (!hash || !password || !bcrypt.compareSync(password, hash)) {
+    return res.status(401).json({ ok: false, error: 'Contraseña incorrecta' })
+  }
+  res.json({ ok: true })
+})
+
+// Credenciales de Square: variable de entorno si existen, si no config/square.json
+// (fuera de git). Nunca hardcodeadas en el código.
+function getSquareCredentials() {
+  let accessToken = process.env.SQUARE_ACCESS_TOKEN || ''
+  let locationId = process.env.SQUARE_LOCATION_ID || ''
+  if (!accessToken || !locationId) {
+    try {
+      const f = path.join(baseConfigDir, 'square.json')
+      if (fs.existsSync(f)) {
+        const parsed = JSON.parse(fs.readFileSync(f, 'utf8'))
+        if (!accessToken) accessToken = parsed.accessToken || ''
+        if (!locationId) locationId = parsed.locationId || ''
+      }
+    } catch {}
+  }
+  return { accessToken, locationId }
+}
+
+// Recalcula el importe esperado a partir de las copias reales del pedido y los
+// precios configurados — el importe que mande el cliente DEBE coincidir. Nunca
+// confiar en el importe que llega del cliente.
+function checkAmountCents(order, amountCents) {
+  if (!order || !Array.isArray(order.copies)) return 'Falta el detalle del pedido (order.copies)'
+  const textosFile = path.join(baseConfigDir, 'textos.txt')
+  const prices = { precio1: 5, precio2: 9, precio3: 12 }
+  if (fs.existsSync(textosFile)) {
+    fs.readFileSync(textosFile, 'utf8').split('\n').forEach((line) => {
+      const [key, val] = line.trim().split(':')
+      if (['precio1', 'precio2', 'precio3'].includes(key)) prices[key] = parseFloat(val) || 0
+    })
+  }
+  const table = [0, prices.precio1, prices.precio2, prices.precio3]
+  const total = order.copies.reduce((sum, c) => {
+    const n = Math.min(Math.max(parseInt(c) || 0, 0), 3)
+    return sum + (n > 0 ? table[n] : 0)
+  }, 0)
+  const expected = Math.round(total * 100)
+  if (amountCents !== expected) return 'El importe no coincide con el pedido'
+  return null
+}
+
 // Square payment endpoint (local backend)
 app.post('/process-payment', async (req, res) => {
   try {
-    const { token, amount, currency = 'EUR', location_id } = req.body
+    const { token, amount, currency = 'EUR', order } = req.body
 
     if (!token || !amount) {
       return res.status(400).json({ error: 'Token y amount son requeridos' })
     }
 
-    const SQUARE_ACCESS_TOKEN = process.env.SQUARE_ACCESS_TOKEN || 'EAAAl0j_Yx8fE69GiPLm7N3hmvuLAD2h6uRIaKomqSVfInluHW9gzA0twdKLPrn8'
-    const SQUARE_LOCATION_ID = process.env.SQUARE_LOCATION_ID || 'LHB32XGQK68GX'
+    const amountCents = Math.round(parseFloat(amount) * 100)
+    const amountError = checkAmountCents(order, amountCents)
+    if (amountError) return res.status(400).json({ error: amountError })
+
+    const { accessToken: SQUARE_ACCESS_TOKEN, locationId: SQUARE_LOCATION_ID } = getSquareCredentials()
+    if (!SQUARE_ACCESS_TOKEN) {
+      return res.status(500).json({ error: 'Square no configurado en el servidor' })
+    }
 
     const payload = {
       source_id: token,
       idempotency_key: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
       amount_money: {
-        amount: Math.round(parseFloat(amount) * 100),
+        amount: amountCents,
         currency,
       },
-      location_id: location_id || SQUARE_LOCATION_ID,
+      location_id: SQUARE_LOCATION_ID, // siempre del servidor, nunca del cliente
     }
 
     const squareRes = await fetch('https://connect.squareupsandbox.com/v2/payments', {

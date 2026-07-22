@@ -276,13 +276,16 @@ export default function MobileApp() {
           style: { layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal' },
           createOrder: async () => {
             const totalCents = Math.round(parseFloat(totalPrice()) * 100)
-            const discountCents = (appliedCoupon?.type === 'discount') ? appliedCoupon.amount : 0
-            const finalCents = Math.max(0, totalCents - discountCents)
-            if (appliedCoupon?.type === 'full' && finalCents > 0) {
+            if (appliedCoupon?.type === 'full' && appliedCoupon.amount < totalCents) {
               throw new Error('El cupón de pago completo no cubre el total')
             }
+            const finalCents = Math.max(0, totalCents - couponDiscountCents(totalCents))
             const finalAmount = (finalCents / 100).toFixed(2)
-            return await createPayPalOrder({ amount: finalAmount, currency: 'EUR' })
+            return await createPayPalOrder({
+              amount: finalAmount,
+              currency: 'EUR',
+              order: { eventCode: normalizeEventCode(eventCode), copies: allCopies(), coupon: appliedCoupon ? couponCode : null },
+            })
           },
           onApprove: async (data) => {
             setPaypalLoading(true)
@@ -496,14 +499,23 @@ export default function MobileApp() {
     return all.reduce((sum, copies) => sum + priceForPhoto(copies), 0).toFixed(2)
   }
 
+  // Copias de todas las fotos del pedido (galería + cámara) — el servidor recalcula
+  // el precio a partir de esto, nunca se fía del importe que mande el cliente.
+  const allCopies = () => [...selected.map(p => p.copies), ...capturedPhotos.map(p => p.copies)]
+  const couponDiscountCents = (total) => {
+    if (!appliedCoupon) return 0
+    if (appliedCoupon.type === 'full') return Math.min(appliedCoupon.amount, total)
+    return appliedCoupon.type === 'discount' ? appliedCoupon.amount : 0
+  }
+
   const totalCents = Math.round(parseFloat(totalPrice()) * 100)
-  const discountCents = (appliedCoupon?.type === 'discount') ? appliedCoupon.amount : 0
+  const discountCents = couponDiscountCents(totalCents)
   const finalCents = Math.max(0, totalCents - discountCents)
   const finalPrice = (finalCents / 100).toFixed(2)
 
   const handleSquarePayment = async () => {
     if (!squareCard) { setSquareError('Pasarela no inicializada'); return }
-    if (appliedCoupon?.type === 'full' && finalCents > 0) {
+    if (appliedCoupon?.type === 'full' && appliedCoupon.amount < totalCents) {
       setSquareError('El cupón de pago completo no cubre el total')
       return
     }
@@ -516,7 +528,7 @@ export default function MobileApp() {
           token: result.token,
           amount: String(finalCents),
           currency: 'EUR',
-          location_id: SQUARE_LOCATION_ID,
+          order: { eventCode: normalizeEventCode(eventCode), copies: allCopies(), coupon: appliedCoupon ? couponCode : null },
         })
       }
       if (appliedCoupon) {

@@ -5,6 +5,8 @@ descargas/
 pdf/
 *.log
 config/paypal.json
+config/square.json
+config/admin.json
 .claude/settings.local.json
 printbox-api-laravel/
 PrintboxAdventureFlutter/
