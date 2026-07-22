@@ -1,8 +1,10 @@
 # PrintboxAdventures
 
-Sistema de gestión de impresión de fotos para eventos. Migrado en 2026 de Python + tkinter a **React + Electron + Node.js Express**, con app web móvil incluida.
+Sistema de gestión de impresión de fotos para eventos: **React + Node.js Express**, desplegado como app web (igual que Printbox Hotels, su proyecto hermano), con app web móvil incluida.
 
 **Versión actual:** 1.0.7 (Abril 2026)
+
+> ⚠️ **Julio 2026 — Electron eliminado.** El proyecto ya no incluye la app de escritorio Electron (la carpeta `electron/` fue retirada del repositorio). `npm run dev` levanta solo React (`:3000`) + backend Express (`:4000`), como en Printbox Hotels. Las secciones de este README que hablan del "instalador .exe", "Panel de Control Electron" o `npm run electron` son **legacy** y ya no aplican — se conservan solo como referencia histórica hasta reescribir el documento. Ver `AUDITORIA_2026-07-20.md` y `CURRENT_STATUS.md` para el estado actual.
 
 ---
 

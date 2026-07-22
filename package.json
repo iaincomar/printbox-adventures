@@ -3,18 +3,14 @@
   "version": "1.0.7",
   "description": "Printbox Adventure - Sistema de impresión de fotos para eventos",
   "author": "Alejandro",
-  "main": "electron/main.js",
   "scripts": {
-    "dev": "concurrently -n REACT,BACKEND,ELECTRON -c cyan,yellow,magenta \"vite --port 3000\" \"node backend/server.js\" \"wait-on http://localhost:3000 && wait-on http://localhost:4000/health && electron .\"",
+    "dev": "concurrently -n REACT,BACKEND -c cyan,yellow \"vite --port 3000\" \"node backend/server.js\"",
     "build": "vite build && node scripts/copy-dist-assets.js",
     "preview": "vite preview"
   },
   "dependencies": {
-    "axios": "^1.6.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "electron-log": "^5.4.3",
-    "electron-updater": "^6.8.3",
     "express": "^4.18.2",
     "fetch-cookie": "^3.2.0",
     "fs-extra": "^11.2.0",
@@ -28,51 +24,9 @@
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
     "concurrently": "^8.2.2",
-    "electron": "^40.7.0",
-    "electron-builder": "^26.8.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.1",
-    "vite": "^7.3.1",
-    "wait-on": "^7.2.0"
-  },
-  "build": {
-    "appId": "com.printbox.adventures",
-    "productName": "Printbox Adventure",
-    "directories": {
-      "output": "dist-electron"
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "iaincomar",
-      "repo": "printbox-adventures"
-    },
-    "win": {
-      "icon": "src/public/assets/ic_launcher.ico",
-      "target": "nsis"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "src/public/assets/ic_launcher.ico",
-      "uninstallerIcon": "src/public/assets/ic_launcher.ico",
-      "installerHeaderIcon": "src/public/assets/ic_launcher.ico"
-    },
-    "files": [
-      "dist/**/*",
-      "backend/**/*",
-      "electron/**/*",
-      "package.json"
-    ],
-    "extraResources": [
-      {
-        "from": "config",
-        "to": "config"
-      },
-      {
-        "from": "src/public/assets",
-        "to": "assets"
-      }
-    ]
+    "vite": "^7.3.1"
   }
 }

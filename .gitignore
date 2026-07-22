@@ -3,11 +3,16 @@ dist/
 dist-electron/
 descargas/
 pdf/
+PBAcount.txt
 *.log
 config/paypal.json
 config/square.json
 config/admin.json
-.claude/settings.local.json
+
+# Cosas de Claude y auditorías internas: nunca al repo
+.claude/
+AUDITORIA_*.md
+
 printbox-api-laravel/
 PrintboxAdventureFlutter/
 PrintBoxFlutter/

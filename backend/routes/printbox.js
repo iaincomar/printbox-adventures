@@ -151,9 +151,6 @@ router.post('/otp/validate', async (req, res) => {
   }
 })
 
-
-module.exports = router
-
 // POST /printbox/photo-send  →  POST /api/v1/events/photo/send
 router.post('/photo-send', async (req, res) => {
   try {
@@ -187,3 +184,5 @@ router.post('/photo-send', async (req, res) => {
     res.status(500).json({ error: err.message })
   }
 })
+
+module.exports = router

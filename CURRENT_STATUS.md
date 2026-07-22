@@ -1,41 +1,27 @@
-# Estado verificado (07 julio 2026)
+# Estado verificado
 
----
+## Limpieza de código (22 julio 2026)
 
-Resumen de la verificación realizada:
+Pasada de "quitar lo que no sea necesario y funcione", equivalente a la que se hizo en Printbox Hotels. Todo verificado con `npm run build`, `node -c` y `php -l`, y arrancando el backend (`/health` → 200).
 
-- **Fecha:** 07/07/2026
-- **Acción principal:** Verificación completa del proyecto (compilación, errores estáticos y revisión de archivos clave).
+- **Electron eliminado por completo** (confirmado con el usuario). La carpeta `electron/` ya no existía en el repo y toda su maquinaria en `package.json` estaba rota (`main: electron/main.js` inexistente, `npm run dev` intentaba lanzar `electron .` y fallaba). Quitado: el `main`, el arranque de electron del script `dev`, las deps `electron`/`electron-builder`/`electron-updater`/`electron-log`/`wait-on`, y todo el bloque `build` (nsis/extraResources). `npm install` eliminó **242 paquetes**. `npm run dev` queda como Hotels: React (`:3000`) + backend (`:4000`).
+- **`backend/server.js`** limpiado de referencias a Electron: `isPackaged`/`process.resourcesPath`/`process.defaultApp` → `DATA_DIR = process.cwd()` fijo; import `os` sin usar retirado; `assetsPath` simplificado a `src/public/assets`.
+- **Dependencia `axios`** retirada (no se usaba en ningún sitio del código).
+- **Assets no usados**: borradas **31 imágenes** de `src/public/assets/` que no referenciaba ningún componente (mascotas `monito-*`, `banners-*`, iconos del flujo OTP/cámara antiguo `IcBack/IcCamera/IcGallery/...`, `Background*`, `splashscreen`, `qr-code`, `logo-adventure2`, variantes `IcHeader*` sin usar). Quedan solo las 5 realmente referenciadas: `ic_launcher.png`, `ic_launcher.ico`, `IcHeaderWhite.png`, `logo-adventure.png`, `terms_and_conditions_2.html`. Menos peso en cada deploy (vite copia `src/public/assets` entero a `dist/`).
+- **Carpeta `assets/` de la raíz** eliminada: era un duplicado exacto de `src/public/assets` que no usaba ni el build ni el backend.
+- **Archivos scratch de la raíz** borrados: `test.html`, `test.php` (diagnóstico IONOS) y `textos.txt` (huérfano; la config real vive en `config/textos.txt`).
+- **Carpeta vacía `backend/printbox/`** eliminada.
+- **Bug arreglado — logo roto del Printer**: `PrinterApp.jsx` apuntaba a `/assets/MoscaPrintbox.png`, que **no existía** (imagen rota en el Panel de Control). Repuntado a `/assets/ic_launcher.png` (el logo usado en el resto de la app).
+- **Bug arreglado — `/config` daba 403 al recargar**: `ViewerApp.jsx` llamaba a `/config` sin barra final; con `config/.htaccess` protegiendo la carpeta, Apache devolvía 403 antes de reescribir a `proxy.php`. Corregido a `/config/` (mismo criterio que el resto de la app).
+- **`backend/routes/printbox.js`**: `module.exports = router` estaba a mitad de fichero (antes de definir `/photo-send`); movido al final para evitar la trampa de reordenar y romperlo.
 
-Resultados rápidos:
+## Verificado
 
-- **Build:** `npm run build` ✅ (dist generado sin errores)
-- **Errores de compilación/linter:** No se han detectado errores (consulta de errores del workspace) ✅
+- `npm install` (–242 paquetes), `npm run build` ✅ sin errores; `dist/assets` queda solo con las 5 imágenes usadas + bundles.
+- `node -c` sobre los 5 ficheros de backend y `php -l proxy.php` ✅.
+- Backend arranca (`DATA_DIR` = raíz del proyecto, `/health` → 200) y `/assets/ic_launcher.png` sirve un PNG real; ninguna referencia `/assets/*` del código queda rota.
 
-Cambios y estado funcional (resumen):
+## Pendiente (no bloqueante)
 
-- **Admin modal:** El botón de cerrar del modal de administración fue corregido; ahora usa `modal-header` con botón `btn-close` y `aria-label` (ver `src/viewer/ViewerApp.jsx`) ✅
-- **Galería y responsive:** Ajustes CSS aplicados en `src/viewer/Viewer.css` para mejor ajuste y grid responsivo ✅
-- **Códigos de cupón:** Formato acortado y verificación compatible implementados en `proxy.php` ✅
-- **Precios y configuración por evento:** Funcionalidad de `textos_{evento}.txt` verificada y normalización de `ev-` implementada ✅
-- **Envío de fotos tras pago:** El flujo para enviar la foto directamente al `evento_printer` tras el pago está activo y probado en build ✅
-
-Resultados de archivos inspeccionados (chequeo rápido):
-
-- `src/viewer/ViewerApp.jsx`: Revisado (modales, admin, build OK)
-- `src/viewer/Viewer.css`: Revisado (estilos de modal y gallery)
-- `proxy.php`: Revisado (correcciones de amount y manejo de eventCode)
-- `package.json`: Revisado (scripts: `build` ejecuta `vite build && node scripts/copy-dist-assets.js`)
-
-Acciones ejecutadas durante la verificación:
-
-1. Ejecuté `npm run build` en el workspace y confirmé salida exitosa.
-2. Consulté errores de compilación/linter del workspace (resultado: ninguno).
-3. Inspeccioné manualmente los archivos clave mencionados arriba.
-4. Actualicé este `CURRENT_STATUS.md` con los resultados.
-
-Siguientes pasos recomendados (opcional):
-
-- Ejecutar pruebas end-to-end / runtime-validation si se desea comprobar flujos de pago y envío en integración con el backend real.
-- Revisar y depurar en entorno IONOS si va a desplegarse en producción (ver `proxy.php` y rutas relativas).
-
+- El `README.md` (970 líneas) sigue teniendo secciones extensas de Electron/instalador `.exe`/Panel de Control que ya no aplican — marcadas como legacy con un aviso al principio, pero convendría una reescritura completa en una pasada aparte.
+- Ver `AUDITORIA_2026-07-20.md` para los arreglos de seguridad previos (importe de pago, admin, CORS/CSP, cupones) y sus pendientes (rotar credenciales de Square/PayPal, subir a producción).

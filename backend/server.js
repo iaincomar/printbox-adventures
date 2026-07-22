@@ -2,7 +2,6 @@ const express = require('express')
 const cors = require('cors')
 const path = require('path')
 const fs = require('fs-extra')
-const os = require('os')
 const fetch = require('node-fetch')
 
 const printRoutes = require('./routes/print')
@@ -13,13 +12,9 @@ const { getAdminPasswordHash, bcrypt } = require('./lib/auth')
 const app = express()
 const PORT = 4000
 
-const isPackaged = app.isPackaged !== undefined
-  ? app.isPackaged
-  : !process.defaultApp
-
-const DATA_DIR = isPackaged
-  ? path.join(os.homedir(), 'AppData', 'Local', 'PrintboxAdventures')
-  : process.cwd()
+// Sin Electron: este backend solo corre en desarrollo con `node backend/server.js` —
+// los datos siempre viven en la raíz del proyecto.
+const DATA_DIR = process.cwd()
 
 app.locals.dataDir = DATA_DIR
 
@@ -51,10 +46,8 @@ if (fs.existsSync(distPath)) {
   app.use(express.static(distPath))
 }
 
-// Servir assets (banners, logos, qr) desde extraResources
-const assetsPath = (isPackaged && process.resourcesPath)
-  ? path.join(process.resourcesPath, 'assets')
-  : path.join(__dirname, '../src/public/assets')
+// Servir assets (logos, términos) desde src/public/assets
+const assetsPath = path.join(__dirname, '../src/public/assets')
 app.use('/assets', express.static(assetsPath))
 
 app.use('/descargas', express.static(path.join(DATA_DIR, 'descargas')))

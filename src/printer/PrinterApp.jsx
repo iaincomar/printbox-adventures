@@ -450,7 +450,7 @@ export default function PrinterApp() {
           <div className="modal-dialog modal-dialog-centered">
             <div className="modal-content bg-dark border border-secondary event-modal">
               <div className="modal-body text-center event-modal-body">
-                <img src="/assets/MoscaPrintbox.png" alt="Logo" className="event-modal-logo" />
+                <img src="/assets/ic_launcher.png" alt="Logo" className="event-modal-logo" />
                 <h5 className="event-modal-title">¿Cuál es el evento?</h5>
                 <p className="event-modal-subtitle">Introduce el número del evento a conectar</p>
 
@@ -487,7 +487,7 @@ export default function PrinterApp() {
       {/* ========== HEADER ========== */}
       <nav className="navbar printer-nav">
         <div className="d-flex align-items-center gap-3">
-          <img src="/assets/MoscaPrintbox.png" alt="Logo" className="printer-logo" />
+          <img src="/assets/ic_launcher.png" alt="Logo" className="printer-logo" />
           <div>
             <div className="printer-title">Printbox Adventure</div>
             <div className="printer-version text-secondary d-flex align-items-center gap-2">
