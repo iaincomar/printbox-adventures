@@ -54,7 +54,7 @@ async function copyAssets() {
     for (const rel of await listSecrets(distConfig)) {
       await fs.remove(path.join(dist, rel))
     }
-    console.log('Copiado .htaccess, proxy.php, .well-known y config/ a dist/ (SIN secretos)')
+    console.log('Copiado .htaccess, proxy.php y config/ a dist/ (SIN secretos)')
     return
   }
 
@@ -69,7 +69,7 @@ async function copyAssets() {
   }
 
   const secrets = await listSecrets(distConfig)
-  console.log('Copiado .htaccess, proxy.php, .well-known y config/ a dist/')
+  console.log('Copiado .htaccess, proxy.php y config/ a dist/')
   if (secrets.length) {
     console.log(`\n  AVISO: ${secrets.length} fichero(s) sensible(s) van dentro de dist/ y se subirán al servidor:`)
     for (const rel of secrets) console.log(`    - ${rel}`)

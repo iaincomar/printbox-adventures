@@ -866,34 +866,16 @@ const getImageUrl = (url) => {
 
 ---
 
-## 14.2 Apple Pay y Google Pay (Pendiente)
+## 14.2 Métodos de pago
 
-### Estado actual
+Métodos activos:
+- **Tarjeta de crédito/débito** vía Square
+- **PayPal** vía SDK de PayPal
 
-Apple Pay y Google Pay **no están implementados** actualmente. Se mantienen activos solo:
-- **Tarjeta de crédito/débito** via Square
-- **PayPal** via SDK de PayPal
-
-### Apple Pay (Pendiente)
-
-**Requisitos para implementar:**
-- Verificar dominio `printbox.incomar.net` en Square Developer Dashboard
-- El archivo de verificación ya está desplegado en el servidor
-- Contactar a Square soporte para habilitar Apple Pay en la cuenta
-
-**Archivo preparado:**
-```
-.well-known/apple-developer-merchantid-domain-association
-```
-
-### Google Pay (Pendiente)
-
-**Requisitos para implementar:**
-- Registrar merchant en Google Pay Dashboard
-- Configurar Square como gateway (alternative: Stripe)
-- Implementación con Google Pay Web API
-
-**Opción recomendada:** Usar **Stripe** para Google Pay en lugar de Square, ya que Stripe tiene mejor documentación y configuración más sencilla.
+Apple Pay y Google Pay **no están implementados**. Apple Pay se retiró por completo
+(ruta `.well-known`, reglas en `proxy.php`/`.htaccess` y CSS del contenedor): nunca
+estuvo montado en el front. Si se quisiera añadir en el futuro habría que verificar el
+dominio en Square y volver a montar el flujo desde cero.
 
 ---
 
